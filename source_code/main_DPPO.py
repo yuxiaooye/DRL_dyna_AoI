@@ -81,11 +81,8 @@ def initAgent(logger, device, agent_args, input_args):
     return agent_fn(logger, device, agent_args, input_args)
 
 
-def initEnv(input_args):
-    sys.path = [os.path.dirname(os.path.dirname(__file__))] + sys.path  # 优先从本项目的adept包中调用
-    from env_mobile.env_mobile import EnvMobile
-    env_fn_train, env_fn_test = EnvMobile, EnvMobile
-    return env_fn_train, env_fn_test
+
+
 
 
 def override(alg_args, run_args, env_fn_train, input_args):
@@ -191,10 +188,10 @@ input_args = parse_args()
 # TODO 这个还需要么？可以和昊哥的config整合在一起吧？起码把路径放在一起~
 def import_env_config(dataset_str, args=None):
     if dataset_str == 'purdue':
-        from src.config.roadmap_config.purdue.env_config_purdue import env_config as env_config
+        from env_configs.config.roadmap_config.purdue.env_config_purdue import env_config as env_config
         return env_config
     elif dataset_str == 'NCSU':
-        from src.config.roadmap_config.NCSU.env_config_NCSU import env_config as env_config
+        from env_configs.config.roadmap_config.NCSU.env_config_NCSU import env_config as env_config
         return env_config
     else:
         raise NotImplementedError
@@ -231,7 +228,8 @@ elif input_args.algo == 'CPPO':
 elif input_args.algo == 'DMPO':
     from algorithms.algo.agent.DMPO import DMPOAgent as agent_fn
 
-env_fn_train, env_fn_test = initEnv(input_args)
+from envs.env_mobile import EnvMobile
+env_fn_train, env_fn_test = EnvMobile, EnvMobile
 
 data_amount = 1
 bar = 100

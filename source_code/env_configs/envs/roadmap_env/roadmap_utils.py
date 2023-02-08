@@ -1,6 +1,6 @@
 from shapely.geometry import Point
 import folium
-from src.envs.coverage_env.coverage_utils import Coverage
+from env_configs.envs.coverage_env.coverage_utils import Coverage
 
 
 class Roadmap():

@@ -1,5 +1,5 @@
-from src.config.base_config import env_config
-from src.envs.roadmap_env.roadmap_utils import Roadmap
+from env_configs.config.base_config import env_config
+from env_configs.envs.roadmap_env.roadmap_utils import Roadmap
 
 rm = Roadmap('purdue')
 env_config.update(

@@ -13,7 +13,7 @@ sys.path = [add_dir] + sys.path
 
 from adept.env.env_ucs.util.utils import *
 # from adept.env.env_ucs.env_ucs import EnvUCS
-from adept.env.env_mobile.env_mobile import EnvMobile
+from adept.env.envs.envs import EnvMobile
 import gym
 import numpy as np
 import pandas as pd
@@ -55,8 +55,8 @@ def yyx_get_env_args(args):
     '''
     这里替换为适配我自己环境的env_config
     '''
-    from src.utils.my_utils import fillin_lazy_args, import_env_config, env_config_wrapper
-    from src.config.main_config import rllib_env_config as yyx_args
+    from env_configs.utils.my_utils import fillin_lazy_args, import_env_config, env_config_wrapper
+    from env_configs.config.main_config import rllib_env_config as yyx_args
     args = fillin_lazy_args(args, dataset_str=args.dataset)
     my_env_config = import_env_config(args.dataset, args)
     my_env_config = env_config_wrapper(my_env_config, args.num_uv, args.sinr_demand, args.num_serviced_pois, args.uav_height)

@@ -1,4 +1,4 @@
-from env_mobile.config_3d import Config
+from envs.config_3d import Config
 
 from pandas import Interval
 import matplotlib.pyplot as plt
@@ -22,7 +22,7 @@ from gym import spaces
 import sys
 import os
 import os.path as osp
-from src.envs.roadmap_env.roadmap_utils import Roadmap
+from env_configs.envs.roadmap_env.roadmap_utils import Roadmap
 
 
 project_dir = osp.dirname(osp.dirname(__file__))
@@ -120,7 +120,7 @@ class EnvMobile():
         self.saved_poi_trajs = np.zeros((self.POI_NUM, 121, 2))  # 用于绘制html
         self.saved_uav_trajs = [np.zeros((121, 2)) for _ in range(self.UAV_NUM)]  # 用于绘制html
 
-        data_file_dir = f'env_mobile/{self.args.dataset}'
+        data_file_dir = f'envs/{self.args.dataset}'
         self.poi_mat = self._init_pois(data_file_dir)  # this mat is **read-only**
         self.debug_index = self.poi_mat[:,0,:].sum(axis=-1).argmin()  # tmp
         # == OK 读的这几个列表应该裁剪，时间步240->121，poi数244->33 ==

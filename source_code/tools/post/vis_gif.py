@@ -19,8 +19,8 @@ import geopandas as gpd
 import movingpandas as mpd
 from folium.plugins import TimestampedGeoJson
 sys.path.append(os.getcwd())
-from src.envs.noma_env.utils import *
-from src.envs.roadmap_env.roadmap_utils import *
+from env_configs.envs.noma_env.utils import *
+from env_configs.envs.roadmap_env.roadmap_utils import *
 
 import argparse
 parser = argparse.ArgumentParser()
