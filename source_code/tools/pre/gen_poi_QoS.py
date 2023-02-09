@@ -24,7 +24,7 @@ def gen():
         case1 = np.linspace(300, 100, T)
         case2 = np.linspace(100, 300, T)
         case3 = np.ones((T,)) * 200
-    elif args.dyna_level == '3':
+    elif args.dyna_level == '3':  # yyx add 5
         case1 = np.linspace(200, 100, T)
         case2 = np.linspace(100, 200, T)
         case3 = np.ones((T,)) * 150
