@@ -2,8 +2,8 @@ import numpy as np
 import os
 import argparse
 
-proj_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-# print(proj_dir)
+proj_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+print(proj_dir)
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--dyna_level', type=str, default='')
@@ -24,6 +24,10 @@ def gen():
         case1 = np.linspace(300, 100, T)
         case2 = np.linspace(100, 300, T)
         case3 = np.ones((T,)) * 200
+    elif args.dyna_level == '3':
+        case1 = np.linspace(200, 100, T)
+        case2 = np.linspace(100, 200, T)
+        case3 = np.ones((T,)) * 150
 
     # poi_QoS = np.ones((POI_NUM, T)) * 100
     poi_QoS = np.vstack(
@@ -31,9 +35,9 @@ def gen():
     )  # shape = (33, 120)
     assert poi_QoS.shape == (POI_NUM, T)
     return poi_QoS
-r'''在source_code\adept\env\env_ucs\util\Beijing路径下生成poi_QoS.npy，shape=(POI_NUM, T)'''
+r'''在source_code/envs/NCSU路径下生成poi_QoS.npy，shape=(POI_NUM, T)'''
 # print(os.getcwd())
-save_dir = os.path.join(proj_dir, f'adept/env/env_ucs/util/NCSU/poi_QoS{args.dyna_level}.npy')
+save_dir = os.path.join(proj_dir, f'envs/NCSU/poi_QoS{args.dyna_level}.npy')
 # print(save_dir)
 np.save(save_dir, gen())
 
