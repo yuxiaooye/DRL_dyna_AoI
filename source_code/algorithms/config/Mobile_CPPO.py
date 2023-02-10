@@ -60,8 +60,8 @@ def getArgs(radius_p, radius_v, radius_pi, env):
     agent_args.advantage_norm = True
     agent_args.observation_space = env.observation_space
     agent_args.hidden_state_dim = 8
-    agent_args.embedding_sizes = [env.observation_space['State'].shape[0], 16, agent_args.hidden_state_dim]
-    agent_args.observation_dim = env.observation_space['State'].shape[0]  # 标量1715，意为每个agent的obs的向量维度
+    agent_args.embedding_sizes = [env.observation_space['Box'].shape[1], 16, agent_args.hidden_state_dim]
+    agent_args.observation_dim = env.observation_space['Box'].shape[1]  # 标量1715，意为每个agent的obs的向量维度
     agent_args.action_space = env.action_space
     # agent_args.adj = env.neighbor_mask
     agent_args.radius_v = radius_v

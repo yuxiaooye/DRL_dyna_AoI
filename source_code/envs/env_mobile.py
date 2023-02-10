@@ -32,7 +32,6 @@ class EnvMobile():
         self.rm = Roadmap(self.input_args.dataset)
 
         self.DISCRIPTION = self.config('description')
-        self.CONTROLLER = self.config("controller_mode")
         self.MAP_X = self.rm.max_dis_x
         self.MAP_Y = self.rm.max_dis_y
         self.WEIGHTED_MODE = self.config("weighted_mode")
@@ -49,7 +48,6 @@ class EnvMobile():
         self.TOTAL_TIME = self.MAX_EPISODE_STEP * self.TIME_SLOT
         self.UAV_SPEED = self.config("uav_speed")
         self.POI_VISIBLE_NUM = self.config("poi_visible_num")
-        self.SMALL_OBS_NUM = self.config("small_obs_num")
 
         self.UPDATE_NUM = self.config("update_num")
         # self.COLLECT_RANGE = self.config("collect_range")
@@ -57,11 +55,9 @@ class EnvMobile():
         self.RATE_THRESHOLD = self.config("rate_threshold")
         self.EMERGENCY_BAR = self.config("emergency_threshold")
         self.EMERGENCY_REWARD_RATIO = self.config("emergency_reward_ratio")
-        self.ADD_EMERGENCY = self.config("add_emergency")
         self.EMERGENCY_PENALTY = self.config("emergency_penalty")
         self.UPDATE_USER_NUM = self.config("update_user_num")
         self.USER_DATA_AMOUNT = self.config("user_data_amount")
-        self.CONCAT_OBS = self.config("concat_obs")
 
         self.n_agents = self.UAV_NUM
         self.n_actions = 1 if self.ACTION_MODE else self.ACTION_ROOT
@@ -112,15 +108,12 @@ class EnvMobile():
         self.poi_value = [[] for _ in range(self.POI_NUM)]  # 维护当前队列中尚未被收集的包，内容是poi_arrive_time的子集
 
         self.poi_property_num = 2 + self.UPDATE_USER_NUM + 1 + 1
-        self.task_property_num = 4
         info = self.get_env_info()
 
         obs_dict = {
             'Box': spaces.Box(low=-1, high=1, shape=(self.n_agents, info['obs_shape'])),
-            'State': spaces.Box(low=-1, high=1, shape=(info['state_shape'],)),
             'available_actions': spaces.Box(low=0, high=1, shape=(self.n_agents, self.ACTION_ROOT)),
         }
-        if self.SMALL_OBS_NUM != -1: obs_dict = {'SmallBox': spaces.Box(low=-1, high=1, shape=(self.n_agents, info['small_obs'])), **obs_dict}
         self.obs_space = spaces.Dict(obs_dict)
         self.observation_space = self.obs_space
 
@@ -216,6 +209,7 @@ class EnvMobile():
     def step(self, action):
         # 若max_episode_step=120, 则执行120次step方法。episode结束时保存120个poi和uav的位置点，而不是icde的121个，把poi、uav的初始位置扔掉！
         self.step_count += 1
+        print('in step, step_count=', self.step_count)
 
         action = action['Discrete']
         uav_reward = np.zeros([self.UAV_NUM])
@@ -571,11 +565,8 @@ class EnvMobile():
         agents_obs = np.vstack(agents_obs)  # shape = (3, 1715)
         obs_dict = {
             'Box': agents_obs,
-            'State': self.get_state() if not self.CONCAT_OBS else self.get_concat_obs(agents_obs),
             'available_actions': self.get_avail_actions()
         }
-        if self.SMALL_OBS_NUM != -1:
-            obs_dict = {'SmallBox': np.vstack([self.get_obs_agent(i, visit_num=self.SMALL_OBS_NUM) for i in range(self.UAV_NUM)]), **obs_dict}
         self.obs = torch.tensor(obs_dict['Box']).float()  # yyx add
         if self.step_count == 0:
             self.stacked_obs = [self.obs for _ in range(4)]
@@ -585,9 +576,7 @@ class EnvMobile():
 
         return obs_dict
 
-    def get_obs_agent(self, agent_id, global_view=False, visit_num=None):
-        if visit_num is None:
-            visit_num = self.POI_VISIBLE_NUM  # -1
+    def get_obs_agent(self, agent_id, global_view=False):
         if global_view:  # False
             distance_limit = 1e10
         else:
@@ -597,6 +586,7 @@ class EnvMobile():
         poi_value_all = self.poi_value
 
         obs = []
+        # uav的位置信息
         for i in range(self.UAV_NUM):
             if i == agent_id:
                 obs.append(self.uav_position[i][0] / self.MAP_X)  # 送入obs时对位置信息进行归一化
@@ -604,104 +594,63 @@ class EnvMobile():
             elif self._cal_distance(self.uav_position[agent_id], self.uav_position[i]) < distance_limit:
                 obs.append(self.uav_position[i][0] / self.MAP_X)
                 obs.append(self.uav_position[i][1] / self.MAP_Y)
-            else:  # 看不到观测范围外的user
+            else:  # 看不到观测范围外的uav
                 obs.extend([0, 0])
 
-        if visit_num == -1:
-            for poi_index, (poi_position, poi_value) in enumerate(zip(poi_position_all, poi_value_all)):
-                d = self._cal_distance(
-                    poi_position, self.uav_position[agent_id])
-                if d < distance_limit:
-                    obs.append((poi_position[0]) / self.MAP_X)
-                    obs.append((poi_position[1]) / self.MAP_Y)
-                    obs.append(len(poi_value) / 121)
+        for poi_index, (poi_position, poi_value) in enumerate(zip(poi_position_all, poi_value_all)):
+            d = self._cal_distance(poi_position, self.uav_position[agent_id])
+            if not d < distance_limit:  # user不在观测范围内
+                for _ in range(self.poi_property_num):  # 7
+                    obs.append(0)
+            else:  # user在观测范围内
+                '''user的位置和队列剩余包数'''
+                obs.append((poi_position[0]) / self.MAP_X)
+                obs.append((poi_position[1]) / self.MAP_Y)
+                obs.append(len(poi_value) / 121)
 
-                    if len(self.poi_collect_time[poi_index]) > 0:  # 当开始看obs的时候，注意以下这个和poi_collect_time有关的东西
-                        obs.append(((self.step_count) * self.TIME_SLOT - self.poi_collect_time[poi_index][-1]) / self.TOTAL_TIME)
-                    else:
-                        obs.append(((self.step_count) * self.TIME_SLOT) / self.TOTAL_TIME)
-
-                    delta_list = []
-                    for arrive in poi_value:
-                        index = self.poi_arrive_time[poi_index].index(arrive) - 1
-                        delta_list.append(0) if self.poi_arrive_time[poi_index][index] < 0 else delta_list.append(self.poi_arrive_time[poi_index][index] / self.TOTAL_TIME)
-
-                        if len(delta_list) == self.UPDATE_USER_NUM: break
-                    if len(delta_list) < self.UPDATE_USER_NUM: delta_list += [0 for _ in range(self.UPDATE_USER_NUM - len(delta_list))]
-
-                    obs.extend(delta_list)
-                else:
-                    num = self.poi_property_num - 1 if self.ADD_EMERGENCY else self.poi_property_num
-                    for _ in range(num):
-                        obs.append(0)
-
-        else:
-            position_list = []
-            for poi_index, (poi_position, poi_value) in enumerate(zip(self.poi_position, self.poi_value)):
-                d = self._cal_distance(poi_position, self.uav_position[agent_id])
-                if d < distance_limit:
-                    position_list.append((poi_index, d))
-            position_list = sorted(position_list, key=lambda x: x[1])
-            exist_num = min(visit_num, len(position_list))
-            for i in range(exist_num):
-                poi_index = position_list[i][0]
-                obs.append(
-                    (poi_position_all[poi_index][0]) / self.MAP_X)
-                obs.append(
-                    (poi_position_all[poi_index][1]) / self.MAP_Y)
-
-                obs.append(len(poi_value_all[poi_index]) / 121)
-
+                '''距离poi上次被收集已经过了多久'''
                 if len(self.poi_collect_time[poi_index]) > 0:
                     obs.append(((self.step_count) * self.TIME_SLOT - self.poi_collect_time[poi_index][-1]) / self.TOTAL_TIME)
-                else:
+                else:  # 一次都没被收集过
                     obs.append(((self.step_count) * self.TIME_SLOT) / self.TOTAL_TIME)
 
+                '''队列中最早到的三个包的到达时间'''
                 delta_list = []
-                for arrive in poi_value_all[poi_index]:
-                    index = self.poi_arrive_time[poi_index].index(arrive) - 1
-                    delta_list.append(self.poi_arrive_time[poi_index][index] / self.TOTAL_TIME)
-                    if len(delta_list) == self.UPDATE_USER_NUM: break
-                if len(delta_list) < self.UPDATE_USER_NUM: delta_list += [0 for _ in range(self.UPDATE_USER_NUM - len(delta_list))]
+                for arrive in poi_value:
+                    index = self.poi_arrive_time[poi_index].index(arrive) - 1  # 当前队列中的包是总arrive数组中的第几个包
+                    if self.poi_arrive_time[poi_index][index] < 0:  # 只有一种可能，就是等于-1，也即最初的无意义的dummy包
+                        delta_list.append(0)
+                    else:  # 记录队列中最早到的三个包的时间
+                        delta_list.append(self.poi_arrive_time[poi_index][index] / self.TOTAL_TIME)
+                    if len(delta_list) == self.UPDATE_USER_NUM:
+                        break
+                if len(delta_list) < self.UPDATE_USER_NUM:  # 用0补齐delta_list到长度为3，最多就记录三个信息了
+                    delta_list += [0 for _ in range(self.UPDATE_USER_NUM - len(delta_list))]
                 obs.extend(delta_list)
-            for i in range(visit_num - exist_num):
-                obs.extend([0 for _ in range(self.poi_property_num)])
+
+            '''添加未来的信息供当前时刻的agent决策'''
+            def check_future_arrival(poi_index, t):
+                delta_step = 121 - self.MAX_EPISODE_STEP
+                stub = min(delta_step + self.step_count+t+1, self.MAX_EPISODE_STEP)  # 防止episode接近结束时下一句越界
+                is_arrival = self.poi_arrival[poi_index, stub]
+                return is_arrival
+
+            for t in range(self.input_args.future_obs):  # 0 or 1 or 2
+                stub = min(self.step_count+t+1, self.MAX_EPISODE_STEP)
+                next_pos = self.poi_mat[poi_index, stub, :]
+                obs.append(next_pos[0] / self.MAP_X)
+                obs.append(next_pos[1] / self.MAP_Y)
+                # 这个0 or 1的特征可能网络不好学。。改成未来若干步内有多少步会来包可能更好？也降低状态维度
+                is_arrival = check_future_arrival(poi_index, t)
+                obs.append(is_arrival)
 
         obs.append(self.step_count / self.MAX_EPISODE_STEP)  # 把当前的step_count也喂到obs中
         obs = np.asarray(obs)
         return obs
 
-    def get_obs_size(self, visit_num=None):
-        if visit_num is None:
-            visit_num = self.POI_VISIBLE_NUM
-
-        if self.CONTROLLER:
-            size = 2 * self.UAV_NUM + 1
-        else:
-            size = 2 * self.UAV_NUM + 1
-
-        if visit_num == -1:
-            size += self.POI_NUM * self.poi_property_num
-        else:
-            size += visit_num * self.poi_property_num
-
-        return size
-
-    def get_state(self):
-        state = [0]
-        return np.asarray(state)
-
-    def get_concat_obs(self, agent_obs):
-        state = np.zeros_like(agent_obs[0])
-        for i in range(self.UAV_NUM):
-            mask = agent_obs[i] != 0
-            np.place(state, mask, agent_obs[i][mask])
-        return state
-
-    def get_state_size(self):
-        if self.CONCAT_OBS:
-            return self.get_obs_size()
-        size = 1
+    def get_obs_size(self):
+        size = 2 * self.UAV_NUM + self.POI_NUM * self.poi_property_num + 1  # 1是step_count
+        size += self.POI_NUM * self.input_args.future_obs * 3  # yyx add
         return size
 
     def get_avail_actions(self):
@@ -712,9 +661,7 @@ class EnvMobile():
         return np.vstack(avail_actions)
 
     def get_avail_agent_actions(self, agent_id):
-
         avail_actions = []
-
         temp_x, temp_y = self.uav_position[agent_id]
         for i in range(self.ACTION_ROOT):
             dx, dy = self._get_vector_by_action(i)
@@ -738,18 +685,14 @@ class EnvMobile():
         pass
 
     def get_env_info(self):
-        env_info = {"state_shape": self.get_state_size(),
-                    "obs_shape": self.get_obs_size(),
+        env_info = {"obs_shape": self.get_obs_size(),
                     "n_actions": self.get_total_actions(),
                     "n_agents": self.n_agents,
                     "max_episode_steps": self.max_episode_steps}
-        if self.SMALL_OBS_NUM != -1:
-            env_info['small_obs'] = self.get_obs_size(self.SMALL_OBS_NUM)
-
         return env_info
 
     def check_arrival(self, step):  # arrival指数据生成
-        delta_step = 121 - self.MAX_EPISODE_STEP  # 0
+        delta_step = 121 - self.MAX_EPISODE_STEP  # 1  这里也许应该和昊哥保持一致改成120
         time = step * self.TIME_SLOT
         temp_arrival = self.poi_arrival[:, delta_step + step]  # 在step时间步各poi是否到达。元素为0或1，0代表该poi未到达，1代表到达
         for p_index in range(len(temp_arrival)):  # 北京共有244个poi，因此len(temp_arrival) = 244

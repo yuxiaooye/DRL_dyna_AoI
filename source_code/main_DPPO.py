@@ -23,7 +23,6 @@ def getRunArgs(input_args):
     run_args.n_thread = 1
     run_args.parallel = False
     run_args.device = input_args.device
-    run_args.name = f'standard{input_args.name}'
     run_args.n_cpu = 1 / 4
     run_args.n_gpu = 0
 
@@ -84,8 +83,8 @@ def override(alg_args, run_args, env_fn_train, input_args):
         alg_args.n_model_update = 3
         alg_args.n_model_update_warmup = 3
         alg_args.n_warmup = 1
-        # 不过n_iter*rollout_length得比一个episode长，不然一次done都不触发，train_trajs不会保存到外存
-        alg_args.n_iter = 5
+        # 注意: n_iter*rollout_length得比一个episode长，不然一次done都不触发，train_trajs不会保存到外存
+        alg_args.n_iter = 7
         alg_args.n_test = 1
         alg_args.n_traj = 4
         alg_args.n_inner_iter = 2
@@ -102,7 +101,7 @@ def override(alg_args, run_args, env_fn_train, input_args):
 
     '''yyx add begin'''
     timenow = datetime.strftime(datetime.now(), "%Y-%m-%d_%H-%M-%S")
-    run_args.name = '{}_{}_{}_{}'.format(timenow, run_args.name, env_fn_train.__name__, agent_fn.__name__)
+    run_args.name = '{}_{}_{}'.format(timenow, env_fn_train.__name__, agent_fn.__name__)
 
 
     # tune env
@@ -116,6 +115,8 @@ def override(alg_args, run_args, env_fn_train, input_args):
         run_args.name += f'_DataAmount={input_args.user_data_amount}'
     if input_args.update_num != 10:
         run_args.name += f'_UpdateNum={input_args.update_num}'
+    if input_args.future_obs != 0:
+        run_args.name += f'_FutureObs={input_args.future_obs}'
 
     # tune algo
     if input_args.lr is not None:
@@ -143,7 +144,7 @@ def parse_args():
     parser.add_argument('--env', type=str, default='mobile')
     parser.add_argument('--algo', type=str, required=False, default='DPPO', help="algorithm(DMPO/IC3Net/CPPO/DPPO/IA2C) ")
     parser.add_argument('--device', type=str, required=False, default='cuda:0', help="device(cpu/cuda:0/cuda:1/...) ")
-    parser.add_argument('--name', type=str, required=False, default='', help="the additional name for logger")
+
     # dirs
     parser.add_argument("--dataset", type=str, default='NCSU', choices=['NCSU'])
     parser.add_argument("--output_dir", type=str, default='runs/debug', help="which fold to save under 'runs/'")
@@ -162,6 +163,8 @@ def parse_args():
     parser.add_argument('--dyna_level', type=str, default='2', help='指明读取不同难度的poi_QoS.npy')
     parser.add_argument('--user_data_amount', type=int, default=1)
     parser.add_argument('--update_num', type=int, default=10)
+    parser.add_argument('--future_obs', type=int, default=0)
+    
 
     args = parser.parse_args()
 
@@ -217,7 +220,6 @@ bar = 100
 
 
 env_args = {  # 这里环境类的参数抄昊宝
-    "controller_mode": True,
     "action_mode": 3,
     "render_mode": True,
     "emergency_threshold": bar,

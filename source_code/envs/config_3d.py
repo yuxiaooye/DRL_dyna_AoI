@@ -47,10 +47,8 @@ class Config(object):
             "dataset": "NCSU",
             "max_episode_step": 120,  # 适配NCSU中的human.csv~~
             "add_emergency": False,
-            "concat_obs": True,
             "weighted_mode": False,  # 先尽量简化问题。本想让weight反比于SNRth，但随着时间在变，不方便~
             "poi_visible_num": -1,
-            "small_obs_num": -1,
 
             "scale": 100,
             "uav_speed": 20,
@@ -65,8 +63,8 @@ class Config(object):
             "agent_field": 500,
 
             # PoI
-            "update_num": 10,
-            "update_user_num": 3,  # TODO 看下这个怎么作用于环境，和上一个有啥区别
+            "update_num": 10,  # 一个uav同时服务多少个poi
+            "update_user_num": 3,  # 作用于obs
             "user_data_amount": 1,  # 调环境：调高任务难度
 
             "collect_range": 500,
