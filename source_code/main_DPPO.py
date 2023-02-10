@@ -174,35 +174,17 @@ def parse_args():
 
 input_args = parse_args()
 
+def hook_input_args(input_args, env_args, output_dir):
+    params = dict()
+    from envs.config_3d import Config
+    env_config = Config(env_args, input_args)
 
-# TODO 这个还需要么？可以和昊哥的config整合在一起吧？起码把路径放在一起~
-def import_env_config(dataset_str, args=None):
-    if dataset_str == 'purdue':
-        from env_configs.config.roadmap_config.purdue.env_config_purdue import env_config as env_config
-        return env_config
-    elif dataset_str == 'NCSU':
-        from env_configs.config.roadmap_config.NCSU.env_config_NCSU import env_config as env_config
-        return env_config
-    else:
-        raise NotImplementedError
-
-def yyx_get_env_args(args):
-    yyx_args = dict()
-    env_config = import_env_config(args.dataset, args)
-    yyx_args['env_config'] = env_config
-    yyx_args['args'] = args
-    return yyx_args
-
-
-def hook_yyx_args(yyx_args, output_dir):
-    # hook the params
-    tmp_dict = copy.deepcopy(yyx_args)
-    tmp_dict['args'] = vars(tmp_dict['args'])
-    tmp_dict['setting_dir'] = yyx_args['args'].setting_dir
+    params['env_config'] = env_config.dict
+    params['input_args'] = vars(input_args)
 
     if not os.path.exists(output_dir): os.makedirs(output_dir)
     with open(os.path.join(output_dir, 'params.json'), 'w') as f:
-        f.write(json.dumps(tmp_dict))
+        f.write(json.dumps(params))
 
 
 if input_args.algo == 'IA2C':
@@ -222,31 +204,29 @@ env_fn_train, env_fn_test = EnvMobile, EnvMobile
 data_amount = 1
 bar = 100
 
-yyx_args = yyx_get_env_args(input_args)
-hao_args = {  # 这里环境类的参数抄昊宝
+
+env_args = {  # 这里环境类的参数抄昊宝
     "controller_mode": True,
     "action_mode": 3,
     "weighted_mode": True,
     "render_mode": True,
     "user_data_amount": data_amount,
-    "uav_num": yyx_args['env_config']['num_uav'],
     "emergency_threshold": bar,
     "collect_range": input_args.snr,
     "initial_energy": input_args.init_energy,
 }
-hao_args["max_episode_step"] = yyx_args['env_config']['num_timestep']
 
-env_train = env_fn_train(hao_args, yyx_args=yyx_args)
-env_test = env_fn_test(hao_args, yyx_args=yyx_args)
+env_train = env_fn_train(env_args, input_args)
+env_test = env_fn_test(env_args, input_args)
 
 run_args = getRunArgs(input_args)
 print('debug =', run_args.debug)
 alg_args = initArgs(run_args, env_train, env_test, input_args)
 alg_args, run_args = override(alg_args, run_args, env_fn_train, input_args)
-hook_yyx_args(yyx_args, run_args.output_dir)
+hook_input_args(input_args, env_args, run_args.output_dir)
 
-env_train.args.output_dir = run_args.output_dir  # 统一输出路径
-env_test.args.output_dir = run_args.output_dir
+env_train.input_args.output_dir = run_args.output_dir  # 统一输出路径
+env_test.input_args.output_dir = run_args.output_dir
 env_train.phase = 'train'
 env_test.phase = 'test'
 

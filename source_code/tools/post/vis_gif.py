@@ -46,15 +46,13 @@ def main(args):
     json_file = osp.join(args.output_dir, 'params.json')
     with open(json_file, 'r') as f:
         params = json.load(f)
-        args.setting_dir = params['setting_dir']
-        args.dataset = params['args']['dataset']
+        args.dataset = params['input_args']['dataset']
         env_config = params['env_config']
         data_file_dir = f'envs/{args.dataset}'
-        poi_QoS = np.load(os.path.join(data_file_dir, f"poi_QoS{params['args']['dyna_level']}.npy"))
-        # TODO 从外存读入poi_QoS之后 在后面怎么读它？不过关于可视化的东西可以后面再写，先把实验跑上~~
-    num_uav = env_config['num_uav']
-    num_poi = env_config['num_poi']
-    num_timestep = env_config['num_timestep']
+        poi_QoS = np.load(os.path.join(data_file_dir, f"poi_QoS{params['input_args']['dyna_level']}.npy"))
+    uav_num = env_config['uav_num']
+    poi_num = env_config['poi_num']
+    num_timestep = env_config['max_episode_step']
 
     rm = Roadmap(args.dataset)
     map = folium.Map(location=[(rm.lower_left[1] + rm.upper_right[1]) / 2, (rm.lower_left[0] + rm.upper_right[0]) / 2],
@@ -80,10 +78,10 @@ def main(args):
     map.add_child(border)
 
     # 先将saved_trajs中的xy转换为lonlat，因为后续输入到folium时形式需要时lonlat
-    for id in range(num_uav):
+    for id in range(uav_num):
         for ts in range(len(uav_trajs[0])):
             uav_trajs[id][ts][:2] = rm.pygamexy2lonlat(*uav_trajs[id][ts][:2])
-    for id in range(num_poi):
+    for id in range(poi_num):
         for ts in range(len(poi_trajs[0])):
             poi_trajs[id][ts][:2] = rm.pygamexy2lonlat(*poi_trajs[id][ts][:2])
 
@@ -96,16 +94,16 @@ def main(args):
 
     # fillin positions for uav, human
     mixed_df = pd.DataFrame()
-    for id in range(num_uav + num_poi):
+    for id in range(uav_num + poi_num):
         df = pd.DataFrame(
             {'id': id,
              't': pd.date_range(start='20230315090000', end=None, periods=num_timestep+1, freq='15s'),
              }
         )
-        if id < num_uav:  # uav
+        if id < uav_num:  # uav
             df['longitude'], df['latitude'] = uav_trajs[id][:, 0], uav_trajs[id][:, 1]  # x=lat, y=lon
         else:  # human
-            df['longitude'], df['latitude'] = poi_trajs[id - num_uav][:, 0], poi_trajs[id - num_uav][:, 1]
+            df['longitude'], df['latitude'] = poi_trajs[id - uav_num][:, 0], poi_trajs[id - uav_num][:, 1]
         mixed_df = mixed_df.append(df)
 
     # positions to traj
@@ -114,14 +112,14 @@ def main(args):
     trajs = mpd.TrajectoryCollection(mixed_gdf, 'id')
 
     def get_name_color_by_index(index):
-        if index < num_uav:
+        if index < uav_num:
             name = f"UAV {index}"
             if args.diff_color:
                 color = uv_color_dict[list(uv_color_dict.keys())[index]]
             else:
                 color = '#%02X%02X%02X' % (255, 0, 0)
-        elif num_uav <= index:
-            name = f"Human {index - num_uav}"
+        elif uav_num <= index:
+            name = f"Human {index - uav_num}"
             color = '#%02X%02X%02X' % (0, 0, 0)
         else:
             raise ValueError
@@ -129,7 +127,7 @@ def main(args):
 
     for index, traj in enumerate(trajs.trajectories):
         name, color = get_name_color_by_index(index)
-        features = traj_to_timestamped_geojson(index, traj, poi_QoS, num_uav, color)
+        features = traj_to_timestamped_geojson(index, traj, poi_QoS, uav_num, color)
         try:
             TimestampedGeoJson(
                 {
@@ -146,7 +144,7 @@ def main(args):
             pass
 
         # line for uav
-        if args.draw_uav_lines and index < num_uav:
+        if args.draw_uav_lines and index < uav_num:
             geo_col = traj.to_point_gdf().geometry
             for s in range(geo_col.shape[0] - 2):
                 xy = [[y, x] for x, y in zip(geo_col.x[s:s + 2], geo_col.y[s:s + 2])]
@@ -164,7 +162,7 @@ def main(args):
         map.get_root().save(vsave_dir + f'/{args.traj_filename[:-4]}{arg_postfix}.html')
     else:
         if not osp.exists(args.group_save_dir): os.makedirs(args.group_save_dir)
-        # postfix = get_save_postfix_by_copo_tune(params['args'])  # note: only use this line when group=hypertune, otherwise use next line
+        # postfix = get_save_postfix_by_copo_tune(params['input_args'])  # note: only use this line when group=hypertune, otherwise use next line
         postfix = args.output_dir.split('/')[-1]
         save_file = os.path.join(args.group_save_dir, f'{arg_postfix}.html')
         print('------args.group_save_dir = ', args.group_save_dir)

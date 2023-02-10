@@ -33,15 +33,13 @@ def print(*args, **kwargs):
 # 看看有没有必要把MIMO用进来?
 class EnvMobile():
     ids = ['EnvMobile-v0']
-    args = {}
 
-    def __init__(self, hao_args, yyx_args, **kwargs):
-        self.config = Config(hao_args)
-        self.args = yyx_args['args']
-        self.env_config = yyx_args['env_config']
+    def __init__(self, env_args, input_args):
+        self.config = Config(env_args, input_args)
+        self.input_args = input_args
 
         # roadmap
-        self.rm = Roadmap(self.args.dataset)
+        self.rm = Roadmap(self.input_args.dataset)
 
         self.DISCRIPTION = self.config('description')
         self.CONTROLLER = self.config("controller_mode")
@@ -52,7 +50,7 @@ class EnvMobile():
         self.SCALE = self.config("scale")
         self.UAV_NUM = self.config("uav_num")
         # self.INITIAL_ENERGY = self.config("initial_energy")
-        self.INITIAL_ENERGY = hao_args['initial_energy']
+        self.INITIAL_ENERGY = env_args['initial_energy']
         self.EPSILON = self.config("epsilon")
         self.ACTION_ROOT = self.config("action_root")
         self.MAX_EPISODE_STEP = self.config("max_episode_step")
@@ -65,7 +63,7 @@ class EnvMobile():
 
         self.UPDATE_NUM = self.config("update_num")
         # self.COLLECT_RANGE = self.config("collect_range")
-        self.POI_NUM = self.env_config['num_poi']  # yyx
+        self.POI_NUM = self.config("poi_num")  
         self.RATE_THRESHOLD = self.config("rate_threshold")
         self.EMERGENCY_BAR = self.config("emergency_threshold")
         self.EMERGENCY_REWARD_RATIO = self.config("emergency_reward_ratio")
@@ -113,14 +111,14 @@ class EnvMobile():
         self.saved_poi_trajs = np.zeros((self.POI_NUM, 121, 2))  # 用于绘制html
         self.saved_uav_trajs = [np.zeros((121, 2)) for _ in range(self.UAV_NUM)]  # 用于绘制html
 
-        data_file_dir = f'envs/{self.args.dataset}'
+        data_file_dir = f'envs/{self.input_args.dataset}'
         self.poi_mat = self._init_pois(data_file_dir)  # this mat is **read-only**
         self.debug_index = self.poi_mat[:,0,:].sum(axis=-1).argmin()  # tmp
         # == OK 读的这几个列表应该裁剪，时间步240->121，poi数244->33 ==
         self._poi_position = copy.deepcopy(self.poi_mat[:, 0, :].reshape(1, -1, 2))
         self._poi_arrival = np.load(os.path.join(data_file_dir, 'arrival.npy'))[:self.POI_NUM, :self._max_episode_steps + 1]  # shape = (33, 121)，其中33是poi数，121是episode的时间步数
         self._poi_weight = np.load(os.path.join(data_file_dir, 'poi_weights.npy'))[:self.POI_NUM]
-        self._poi_QoS = np.load(os.path.join(data_file_dir, f'poi_QoS{self.args.dyna_level}.npy'))
+        self._poi_QoS = np.load(os.path.join(data_file_dir, f'poi_QoS{self.input_args.dyna_level}.npy'))
         assert self._poi_QoS.shape == (self.POI_NUM, self.MAX_EPISODE_STEP)
 
         self._poi_value = [[] for _ in range(self.POI_NUM)]  # 维护当前队列中尚未被收集的包，内容是poi_arrive_time的子集
@@ -588,7 +586,7 @@ class EnvMobile():
         return data_rate / 1e6
 
     def get_obs_from_outside(self):  # yyx add
-        if self.args.debug_use_stack_frame:
+        if self.input_args.debug_use_stack_frame:
             return torch.concat(self.stacked_obs, dim=-1)  # shape = (3, obs_dim*4)
         else:
             return self.obs  # shape = (3, obs_dim)
@@ -818,7 +816,7 @@ class EnvMobile():
         '''
         assert self.phase is not None
         postfix = 'best' if is_newbest else str(total_steps)  # 现在total_steps其实恒为1，不过记录训练过程的轨迹也意义不大，先只记录best轨迹吧~
-        save_traj_dir = osp.join(self.args.output_dir, f'{self.phase}_saved_trajs')
+        save_traj_dir = osp.join(self.input_args.output_dir, f'{self.phase}_saved_trajs')
         if not osp.exists(save_traj_dir): os.makedirs(save_traj_dir)
         # print(f'phase = {self.phase}, shape = {np.array(self.uav_trace).shape}')
         np.savez(osp.join(save_traj_dir, f'eps_{postfix}.npz'), self.poi_mat, np.array(self.uav_trace))

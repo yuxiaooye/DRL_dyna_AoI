@@ -1,19 +1,17 @@
-from unicodedata import name
 import json5
-import numpy as np
-import random
+from env_configs.envs.roadmap_env.roadmap_utils import Roadmap
 '''环境配置类'''
 
 
 class Config(object):
 
-    def __init__(self, args=None):
+    def __init__(self, env_args, input_args):
         '''用一个dict类型的args初始化'''
+        self.input_args = input_args
         self.default_config()
-        if args is not None:
-            for key in args.keys():
-                self.dict[key] = args[key]
-
+        self.dataset_config()
+        for key in env_args.keys():
+            self.dict[key] = env_args[key]
 
     def __call__(self, attr):
         assert attr in self.dict.keys(), print('key error[', attr, ']')
@@ -26,6 +24,19 @@ class Config(object):
         with open(outfile, 'w') as f:
             f.write(json_str)
 
+    def dataset_config(self):
+        dataset = self.input_args.dataset
+        # rm = Roadmap(dataset)
+        # self.dict['max_x'] = round(rm.max_dis_x)
+        # self.dict['max_y'] = round(rm.max_dis_y)
+        if dataset == 'purdue':
+            self.dict['poi_num'] = 59
+        elif dataset == 'NCSU':
+            self.dict['poi_num'] = 33
+        else:
+            raise NotImplementedError
+
+
     def default_config(self):
         self.dict = {
             "description": "default",
@@ -34,7 +45,7 @@ class Config(object):
             "action_mode": 0,  # 1 for continuous,  0 for discrete,
             "action_root": 13,
             "dataset": "NCSU",
-
+            "max_episode_step": 120,  # 适配NCSU中的human.csv~~
             "add_emergency": False,
             "concat_obs": True,
             "weighted_mode": True,
@@ -50,6 +61,7 @@ class Config(object):
             "epsilon": 1e-3,
 
             # UAV
+            'uav_num': 3,
             "agent_field": 500,
 
             # PoI

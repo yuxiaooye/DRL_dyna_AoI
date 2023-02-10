@@ -69,7 +69,7 @@ def get_map_props():
     }
     return map_props
 
-def traj_to_timestamped_geojson(index, trajectory, poi_QoS, num_uav, color):  # indextrajindexenum
+def traj_to_timestamped_geojson(index, trajectory, poi_QoS, uav_num, color):  # indextrajindexenum
 
     point_gdf = trajectory.df.copy()
     # point_gdf["previous_geometry"] = point_gdf["geometry"].shift()
@@ -85,13 +85,13 @@ def traj_to_timestamped_geojson(index, trajectory, poi_QoS, num_uav, color):  # 
         ra = {'uav': 5, 'human': 1}
         op = {'uav': 1, 'human': 1}
 
-        if index < num_uav:  # UAV
+        if index < uav_num:  # UAV
             radius, opacity = ra['uav'], op['uav']
         else:  # human
             # case1 fixed OK
             radius, opacity = ra['human'], op['human']
             # case2 dyna 能跑通，但html中画不出点
-            QoS = poi_QoS[index-num_uav][min(i, len(poi_QoS[0])-1)]  # 防止数组越界
+            QoS = poi_QoS[index-uav_num][min(i, len(poi_QoS[0])-1)]  # 防止数组越界
             # radius, opacity = (200 - QoS)/100 + 1, op['human']
             radius, opacity = (200 - QoS)/50 + 2, op['human']  # 硬编码以适配dyna_level=3
 
