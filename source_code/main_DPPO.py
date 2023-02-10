@@ -103,18 +103,27 @@ def override(alg_args, run_args, env_fn_train, input_args):
     '''yyx add begin'''
     timenow = datetime.strftime(datetime.now(), "%Y-%m-%d_%H-%M-%S")
     run_args.name = '{}_{}_{}_{}'.format(timenow, run_args.name, env_fn_train.__name__, agent_fn.__name__)
+
+
+    # tune env
+    if input_args.snr != 200:
+        run_args.name += f'_SNR={input_args.snr}'
+    if input_args.dyna_level != '':
+        run_args.name += f'_DynaLevel={input_args.dyna_level}'
+    if input_args.init_energy != 719280:
+        run_args.name += f'_InitEnergy={input_args.init_energy}'
+    if input_args.user_data_amount != 1:
+        run_args.name += f'_DataAmount={input_args.user_data_amount}'
+    if input_args.update_num != 10:
+        run_args.name += f'_UpdateNum={input_args.update_num}'
+
+    # tune algo
     if input_args.lr is not None:
         run_args.name += f'_LR={input_args.lr}'
         alg_args.agent_args.lr = input_args.lr
     if input_args.lr_v is not None:
         run_args.name += f'_LR-V={input_args.lr_v}'
         alg_args.agent_args.lr_v = input_args.lr_v
-    if input_args.snr != 200:
-        run_args.name += f'_SNR={input_args.snr}'
-    if input_args.init_energy != 719280:
-        run_args.name += f'_InitEnergy={input_args.init_energy}'
-    if input_args.dyna_level != '':
-        run_args.name += f'_DynaLevel={input_args.dyna_level}'
     if input_args.debug_use_stack_frame:
         run_args.name += f'_UseStackFrame'
     run_args.output_dir = '../{}/{}'.format(input_args.output_dir, run_args.name)
@@ -151,6 +160,8 @@ def parse_args():
     parser.add_argument('--snr', type=float, default=200)
     parser.add_argument('--init_energy', type=float, default=719280)
     parser.add_argument('--dyna_level', type=str, default='', help='指明读取不同难度的poi_QoS.npy')
+    parser.add_argument('--user_data_amount', type=int, default=1)
+    parser.add_argument('--update_num', type=int, default=10)
 
     args = parser.parse_args()
 
@@ -201,7 +212,7 @@ elif input_args.algo == 'DMPO':
 from envs.env_mobile import EnvMobile
 env_fn_train, env_fn_test = EnvMobile, EnvMobile
 
-data_amount = 1
+
 bar = 100
 
 
@@ -210,10 +221,11 @@ env_args = {  # 这里环境类的参数抄昊宝
     "action_mode": 3,
     "weighted_mode": True,
     "render_mode": True,
-    "user_data_amount": data_amount,
     "emergency_threshold": bar,
     "collect_range": input_args.snr,
     "initial_energy": input_args.init_energy,
+    "user_data_amount": input_args.user_data_amount,
+    "update_num": input_args.update_num,
 }
 
 env_train = env_fn_train(env_args, input_args)

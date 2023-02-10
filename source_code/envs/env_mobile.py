@@ -16,8 +16,7 @@ from env_configs.roadmap_env.roadmap_utils import Roadmap
 
 project_dir = osp.dirname(osp.dirname(__file__))
 
-def print(*args, **kwargs):
-    pass
+
 
 # 看看有没有必要把MIMO用进来?
 class EnvMobile():
@@ -27,6 +26,8 @@ class EnvMobile():
         self.config = Config(env_args, input_args)
         self.input_args = input_args
 
+        self.debug = self.input_args.debug
+        self.test = self.input_args.test
         # roadmap
         self.rm = Roadmap(self.input_args.dataset)
 
@@ -86,9 +87,6 @@ class EnvMobile():
 
         self._get_energy_coefficient()
 
-        # for i in range(0, 10):
-        #     print(i, self._cal_distance((0, 0), (0, i)),
-        #           self._get_data_rate((0, 0), (0, i)))
         if self.ACTION_MODE == 1:
             self.gym_action_space = spaces.Box(min=-1, max=1, shape=(2,))
         elif self.ACTION_MODE == 0:
@@ -104,7 +102,7 @@ class EnvMobile():
         self.poi_mat = self._init_pois(data_file_dir)  # this mat is **read-only**
         self.debug_index = self.poi_mat[:,0,:].sum(axis=-1).argmin()  # tmp
         # == OK 读的这几个列表应该裁剪，时间步240->121，poi数244->33 ==
-        self._poi_position = copy.deepcopy(self.poi_mat[:, 0, :].reshape(1, -1, 2))
+        self.poi_position = copy.deepcopy(self.poi_mat[:, 0, :].reshape(1, -1, 2))  # 0意为t=0时poi的初始位置
         self._poi_arrival = np.load(os.path.join(data_file_dir, 'arrival.npy'))[:self.POI_NUM, :self._max_episode_steps + 1]  # shape = (33, 121)，其中33是poi数，121是episode的时间步数
         self._poi_weight = np.load(os.path.join(data_file_dir, 'poi_weights.npy'))[:self.POI_NUM]
         self._poi_QoS = np.load(os.path.join(data_file_dir, f'poi_QoS{self.input_args.dyna_level}.npy'))
@@ -113,8 +111,6 @@ class EnvMobile():
         self._poi_value = [[] for _ in range(self.POI_NUM)]  # 维护当前队列中尚未被收集的包，内容是poi_arrive_time的子集
         self._poi_last_visit = [-1 for _ in range(self.POI_NUM)]
 
-        # self._poi_position[:, :, 0] *= self.MAP_X  # OK yyx should delete it
-        # self._poi_position[:, :, 1] *= self.MAP_Y
 
         self.poi_property_num = 2 + self.UPDATE_USER_NUM + 1 + 1
         self.task_property_num = 4
@@ -193,7 +189,7 @@ class EnvMobile():
         self.poi_value = copy.deepcopy(self._poi_value)
 
         self.uav_position = copy.deepcopy(self._uav_position)
-        self.poi_position = copy.deepcopy(self._poi_position)
+
 
         self.poi_arrive_time = [[-1] for _ in range(self.POI_NUM)]  # 相比poi_value数组初值多了-1，且记录所有包生成时间，并不通过pop维护
         self.poi_delta_time = [[] for _ in range(self.POI_NUM)]
@@ -224,9 +220,11 @@ class EnvMobile():
         pass
 
     def _human_move(self):
-        self._poi_position = copy.deepcopy(self.poi_mat[:, self.step_count, :].reshape(1, -1, 2))
+        self.poi_position = copy.deepcopy(self.poi_mat[:, self.step_count, :].reshape(1, -1, 2))
 
     def step(self, action):
+        if self.debug:
+            print(self.poi_position.mean())
         # 若max_episode_step=120, 则执行120次step方法。episode结束时保存120个poi和uav的位置点，而不是icde的121个，把poi、uav的初始位置扔掉！
         self.step_count += 1
 
@@ -239,7 +237,7 @@ class EnvMobile():
             uav_trajectory.extend(self.uav_trace[i])
 
         '''step1. poi、uav移动和uav收集'''
-        self._human_move()  # 根据self.human_df更新self.poi_position
+        self._human_move()  # 根据self.human_df更新self._poi_position
 
         for uav_index in range(self.UAV_NUM):
             self.update_list[uav_index].append([])
@@ -253,9 +251,8 @@ class EnvMobile():
 
             self._use_energy(uav_index, energy_consuming)
             # tau - 移动时间 = 收集时间
-            # 打印发现要么是12.5，要么是20，盲猜昊宝用的是周围若干个点的离散动作，distance只有两种情况
+            # 打印发现要么是12.5，要么是20，昊宝用的是周围若干个点的离散动作，distance只有两种情况
             collect_time = max(0, self.TIME_SLOT - distance / self.UAV_SPEED) if not Flag else 0
-            # print('In step, collect_time =', collect_time)
             r, uav_data_collect[uav_index] = self._collect_data_from_poi(  # 调用关键函数，uav收集
                 uav_index, 0, collect_time)
 
@@ -281,9 +278,6 @@ class EnvMobile():
                 # 我觉得这里不应该是120-108.21，而应该是120-20，其中20来自poi_arrival_time[i][-1]，昊宝也认可了
                 # 更准确来说，第1次收集后，应该-poi_arrival_time[i][1]，第2次收集后，应该-[i][2]，因此可能还需要新开一个变量记录当前收集了多少个包
                 aoi = temp_time - self.poi_collect_time[i][-1]
-                # -- yyx debug --
-                # aoi = temp_time - self.poi_delta_time[i][-1]
-                # -- yyx debug
             else:  # 数据未被收集，AoI根据y=x增长
                 aoi = temp_time
             if aoi > self.EMERGENCY_BAR * self.TIME_SLOT:  # 超过了AoI阈值
@@ -347,7 +341,6 @@ class EnvMobile():
         total_arrive_user = 0
         collect_user = 0
         cr_for_each = []  # yyx debug 各个poi的collect ratio
-        # print('在summary_info中, poi_collect_time = ', self.poi_collect_time)
         for index, p in enumerate(self.poi_collect_time):
             fenzi = np.sum([c < self.TOTAL_TIME for c in p])  # 之所以是小于号，因为episode结束时的那最后一次收集不算
             fenmu = len(p)
@@ -370,10 +363,15 @@ class EnvMobile():
         info['d_aoi'] = mean_aoi.item()
         info['e_weighted_aoi'] = weighted_mean_aoi.item()  # 论文metric：episodic-aoi
         info['f_weighted_bar_aoi'] = weighted_bar_aoi.item()
-
         info['h_total_energy_consuming'] = t_e.item()
         info['h_energy_consuming_ratio'] = t_e / (self.UAV_NUM * self.INITIAL_ENERGY)
         info['f_episode_step'] = self.step_count
+
+        if self.debug or self.test:
+            print(f"collect_data_ratio: {info['a_poi_collect_ratio']} "
+                  f"episodic_aoi: {info['e_weighted_aoi']} "
+                  )
+
 
         return info
 
@@ -429,17 +427,16 @@ class EnvMobile():
                     poi_position, self.uav_position[uav_index])
                 self.debug_all_d.append(d)
                 if d < self._poi_QoS[poi_index][self.step_count - 1]:  # 动态SNRth
-                    if poi_index == self.debug_index:
+                    if self.input_args.debug and poi_index == self.debug_index:
                         print(f'debug poi has been collected! distance: {d} collect by: uav{uav_index}')
                     # if d < self.COLLECT_RANGE and len(poi_value) > 0:  # SNRth固定，不依赖于poi_index和step_count变化。来自--snr
                     position_list.append((poi_index, d))
 
-            position_list = sorted(position_list, key=lambda x: x[1])
-
+            position_list = sorted(position_list, key=lambda x: x[1])  # 优先收集最近的user的队列中的所有包
             update_num = min(len(position_list), self.UPDATE_NUM)  # UPDATE_NUM = 10, 也即一个无人机最多同时服务10个poi
-
             now_time = (self.step_count + 1) * self.TIME_SLOT - collect_time  # (0+1) * 20 - 12.5 = 7.5
-            # print('In _collect, now_time =', now_time)
+
+            debug_collect_proportion = []
             for i in range(update_num):
                 poi_index = position_list[i][0]  # 首次到达断点时，poi_index = 128
                 rate = self._get_data_rate(
@@ -448,11 +445,12 @@ class EnvMobile():
                     rate = 0
                 update_user_num = min(50, len(self.poi_value[poi_index]))
                 delta_t = self.USER_DATA_AMOUNT / rate  # 单位为秒，值都是零点几
-                # print('In _collect, delta_t =', delta_t)
                 weight = 1 if not self.WEIGHTED_MODE else self._poi_weight[poi_index]
 
+                debug_packet_num_before_collect = len(self.poi_value[poi_index])
                 for u in range(update_user_num):  # 对于被uav选中服务的poi，可以多次收集它的包，直到collect_time被消耗完~~
-                    # TODO 看下对于被选中的用户，收集的包数占队列中剩余包数的比例，是不是太大了，如果是的话可以调低TIME_SLOT
+                    # 看下对于被服务的用户，收集的包数占队列中剩余包数的比例，是不是太大了，如果是的话可以调低TIME_SLOT
+                    # 用在Amount=1的环境上训练的结果，在Amount=3的环境上inference，看这个比例是不是可以变大
                     # 每收集一个poi的一个包，now_time就会增加delta_t, 因此这个break是经常触发的
                     if now_time + delta_t >= (self.step_count + 1) * self.TIME_SLOT:
                         break
@@ -462,12 +460,9 @@ class EnvMobile():
                     # 编辑tn>500的断点，poi_arrive_time[167] = [-1, 60, ...], index = 0, 意为这是该poi第一次被数据收集
                     index = self.poi_arrive_time[poi_index].index(self.poi_value[poi_index].pop(0)) - 1  # index的物理意义：确定当前是第几个包被收集到
                     self.poi_collect_time[poi_index].append(now_time)  # 唯一写poi_collect_time的地方
-                    # if poi_index == self.debug_index:
-                    # print('收集代表poi的数据后, poi_collect_time =', self.poi_collect_time[poi_index])
-                    # print(f'向{poi_index}号poi的poi_collect_time数组中添加')
                     yn = self.poi_delta_time[poi_index][index]  # yn其实就是相邻两次数据生成之间的间隔时间，也即t2g-t1g
                     tn = max(0, now_time - self.poi_arrive_time[poi_index][index + 1])  # 747.59 - 60 = 687.59，表示对于当前收集的包，生成与被收集之间的时间差
-                    # print('tn = ', tn)
+
                     assert tn >= 0 and yn > 0
                     self.poi_aoi[poi_index].append(yn * tn + 0.5 * yn * yn)
                     self.poi_wait_time[poi_index].append(now_time - self.poi_arrive_time[poi_index][index + 1])
@@ -476,8 +471,14 @@ class EnvMobile():
                     now_time += delta_t
                     assert now_time <= (self.step_count + 1) * self.TIME_SLOT + 1
 
+                if debug_packet_num_before_collect != 0:
+                    debug_collect_proportion.append(
+                        (debug_packet_num_before_collect - len(self.poi_value[poi_index])) / debug_packet_num_before_collect)
                 if now_time >= (self.step_count + 1) * self.TIME_SLOT:
                     break
+            if (self.debug or self.test) and len(debug_collect_proportion) != 0:
+                print(np.array(debug_collect_proportion).mean())
+                # self._plot_histograms(debug_collect_proportion)
         return sum(reward_list), len(reward_list)
 
     def _get_vector_by_theta(self, action):
@@ -514,19 +515,12 @@ class EnvMobile():
     def _is_episode_done(self):
         if self.step_count >= self.MAX_EPISODE_STEP:
             return True
-        # else:
-        #     for i in range(self.UAV_NUM):
-        #         if self._judge_obstacle(None, self.uav_position[i]):
-        #             print('cross the border!')
-        #             return True
-        #     # return np.bool(np.all(self.dead_uav_list))
         return False
 
     def _judge_obstacle(self, cur_pos, next_pos):
         if (0 <= next_pos[0] <= self.MAP_X) and (0 <= next_pos[1] <= self.MAP_Y):
             return False
         else:
-            # print('出界了！！！！')
             return True
 
     def _use_energy(self, uav_index, energy_consuming):
@@ -599,10 +593,11 @@ class EnvMobile():
 
         return obs_dict
 
-    def get_obs_agent(self, agent_id, cluster_id=-1, global_view=False, visit_num=None):
+    def get_obs_agent(self, agent_id, global_view=False, visit_num=None):
+
         if visit_num is None:
-            visit_num = self.POI_VISIBLE_NUM
-        if global_view:
+            visit_num = self.POI_VISIBLE_NUM  # -1
+        if global_view:  # False
             distance_limit = 1e10
         else:
             distance_limit = self.agent_field
@@ -614,12 +609,12 @@ class EnvMobile():
         obs = []
         for i in range(self.UAV_NUM):
             if i == agent_id:
-                obs.append(self.uav_position[i][0] / self.MAP_X)  # 送入obs时对位置信息进行归一化，合理
+                obs.append(self.uav_position[i][0] / self.MAP_X)  # 送入obs时对位置信息进行归一化
                 obs.append(self.uav_position[i][1] / self.MAP_Y)
             elif self._cal_distance(self.uav_position[agent_id], self.uav_position[i]) < distance_limit:
                 obs.append(self.uav_position[i][0] / self.MAP_X)
                 obs.append(self.uav_position[i][1] / self.MAP_Y)
-            else:
+            else:  # 看不到观测范围外的user
                 obs.extend([0, 0])
 
         if visit_num == -1:
@@ -627,11 +622,8 @@ class EnvMobile():
                 d = self._cal_distance(
                     poi_position, self.uav_position[agent_id])
                 if d < distance_limit:
-                    obs.append(
-                        (poi_position[0]) / self.MAP_X)
-                    obs.append(
-                        (poi_position[1]) / self.MAP_Y)
-
+                    obs.append((poi_position[0]) / self.MAP_X)
+                    obs.append((poi_position[1]) / self.MAP_Y)
                     obs.append(len(poi_value) / 121)
 
                     if len(self.poi_collect_time[poi_index]) > 0:  # 当开始看obs的时候，注意以下这个和poi_collect_time有关的东西
@@ -768,7 +760,6 @@ class EnvMobile():
 
 
     def check_arrival(self, step):  # arrival指数据生成
-        # print('In check_arrival(), step = ', step)  # 打印可知，一个episode有121个step
         delta_step = 121 - self.MAX_EPISODE_STEP  # 0
         time = step * self.TIME_SLOT
         temp_arrival = self._poi_arrival[:, delta_step + step]  # 在step时间步各poi是否到达。元素为0或1，0代表该poi未到达，1代表到达
@@ -807,5 +798,4 @@ class EnvMobile():
         postfix = 'best' if is_newbest else str(total_steps)  # 现在total_steps其实恒为1，不过记录训练过程的轨迹也意义不大，先只记录best轨迹吧~
         save_traj_dir = osp.join(self.input_args.output_dir, f'{self.phase}_saved_trajs')
         if not osp.exists(save_traj_dir): os.makedirs(save_traj_dir)
-        # print(f'phase = {self.phase}, shape = {np.array(self.uav_trace).shape}')
         np.savez(osp.join(save_traj_dir, f'eps_{postfix}.npz'), self.poi_mat, np.array(self.uav_trace))

@@ -67,7 +67,7 @@ class Config(object):
             # PoI
             "update_num": 10,
             "update_user_num": 3,  # TODO 看下这个怎么作用于环境，和上一个有啥区别
-            "user_data_amount": 1,  # TODO 为调高任务难度可以尝试这个
+            "user_data_amount": 1,  # 调环境：调高任务难度
 
             "collect_range": 500,
             "rate_threshold": 0.05,
