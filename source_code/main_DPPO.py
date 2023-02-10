@@ -1,11 +1,3 @@
-'''
-注意：这里DPPO是yali du的使用扩展值函数进行通信的DPPO
-from algorithms拷贝自yali du的algorithms文件夹
-
-- 在哪里初始化agent类？
-- 在哪里初始化env类？
-- 在哪里把env的状态和动作空间告诉agent？ 在initAgent函数中携带了空间信息吗？
-'''
 import sys
 import os
 
@@ -15,22 +7,14 @@ print(proj_dir)
 sys.path.append(proj_dir)
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-from logging import log
 from datetime import datetime
-from re import T
 import importlib
-import ray
-import time
-import warnings
 import json
 import copy
-import gym
 from algorithms.utils import Config, LogClient, LogServer, mem_report
-from torch import distributed as dist
 from algorithms.algo.main import OnPolicyRunner
 
 os.environ['MKL_SERVICE_FORCE_INTEL'] = '1'
-import torch
 import argparse
 
 
@@ -204,8 +188,8 @@ def import_env_config(dataset_str, args=None):
 
 def yyx_get_env_args(args):
     yyx_args = dict()
-    my_env_config = import_env_config(args.dataset, args)
-    yyx_args['my_env_config'] = my_env_config
+    env_config = import_env_config(args.dataset, args)
+    yyx_args['env_config'] = env_config
     yyx_args['args'] = args
     return yyx_args
 
@@ -216,8 +200,6 @@ def hook_yyx_args(yyx_args, output_dir):
     tmp_dict['args'] = vars(tmp_dict['args'])
     tmp_dict['setting_dir'] = yyx_args['args'].setting_dir
 
-    print('------------------os.getcwd()----------')
-    print(os.getcwd())
     if not os.path.exists(output_dir): os.makedirs(output_dir)
     with open(os.path.join(output_dir, 'params.json'), 'w') as f:
         f.write(json.dumps(tmp_dict))
@@ -240,25 +222,19 @@ env_fn_train, env_fn_test = EnvMobile, EnvMobile
 data_amount = 1
 bar = 100
 
-yyx_args = yyx_get_env_args(parse_args())
+yyx_args = yyx_get_env_args(input_args)
 hao_args = {  # 这里环境类的参数抄昊宝
-    'test_mode': True,
-    'save_path': '.',
     "controller_mode": True,
-    "seed": 1,
     "action_mode": 3,
     "weighted_mode": True,
-    "mip_mode": False,
-    "noisy_power": -90,
-    "tx_power": 20,
     "render_mode": True,
     "user_data_amount": data_amount,
-    "uav_num": yyx_args['my_env_config']['num_uav'],
+    "uav_num": yyx_args['env_config']['num_uav'],
     "emergency_threshold": bar,
     "collect_range": input_args.snr,
     "initial_energy": input_args.init_energy,
 }
-hao_args["max_episode_step"] = yyx_args['my_env_config']['num_timestep']  # TODO unity it
+hao_args["max_episode_step"] = yyx_args['env_config']['num_timestep']
 
 env_train = env_fn_train(hao_args, yyx_args=yyx_args)
 env_test = env_fn_test(hao_args, yyx_args=yyx_args)

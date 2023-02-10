@@ -4,8 +4,6 @@ import random
 import numpy as np
 import torch
 import wandb
-from ray.util import pdb
-import ray
 import time
 from torch.utils.tensorboard import SummaryWriter
 

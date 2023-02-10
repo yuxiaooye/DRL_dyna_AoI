@@ -38,7 +38,7 @@ class EnvMobile():
     def __init__(self, hao_args, yyx_args, **kwargs):
         self.config = Config(hao_args)
         self.args = yyx_args['args']
-        self.env_config = yyx_args['my_env_config']
+        self.env_config = yyx_args['env_config']
 
         # roadmap
         self.rm = Roadmap(self.args.dataset)
@@ -54,29 +54,23 @@ class EnvMobile():
         # self.INITIAL_ENERGY = self.config("initial_energy")
         self.INITIAL_ENERGY = hao_args['initial_energy']
         self.EPSILON = self.config("epsilon")
-        self.DEBUG_MODE = self.config("debug_mode")
-        self.TEST_MODE = self.config("test_mode")
-        self.USER_LENGTH_REWARD = self.config("user_length_reward")
         self.ACTION_ROOT = self.config("action_root")
         self.MAX_EPISODE_STEP = self.config("max_episode_step")
         self._max_episode_steps = self.MAX_EPISODE_STEP
         self.TIME_SLOT = self.config("time_slot")
         self.TOTAL_TIME = self.MAX_EPISODE_STEP * self.TIME_SLOT
         self.UAV_SPEED = self.config("uav_speed")
-        self.LOG_REWARD = self.config("log_reward")
         self.POI_VISIBLE_NUM = self.config("poi_visible_num")
         self.SMALL_OBS_NUM = self.config("small_obs_num")
 
         self.UPDATE_NUM = self.config("update_num")
         # self.COLLECT_RANGE = self.config("collect_range")
-        self.POI_INIT_DATA = self.config("poi_init_data")
         self.POI_NUM = self.env_config['num_poi']  # yyx
         self.RATE_THRESHOLD = self.config("rate_threshold")
         self.EMERGENCY_BAR = self.config("emergency_threshold")
         self.EMERGENCY_REWARD_RATIO = self.config("emergency_reward_ratio")
         self.ADD_EMERGENCY = self.config("add_emergency")
         self.EMERGENCY_PENALTY = self.config("emergency_penalty")
-        self.RATE_DISCOUNT = self.config("rate_discount")
         self.UPDATE_USER_NUM = self.config("update_user_num")
         self.USER_DATA_AMOUNT = self.config("user_data_amount")
         self.CONCAT_OBS = self.config("concat_obs")
@@ -85,7 +79,6 @@ class EnvMobile():
         self.episode_limit = self._max_episode_steps
         self.n_actions = 1 if self.ACTION_MODE else self.ACTION_ROOT
         self.agent_field = self.config("agent_field")
-        self.reward_scale = self.config('reward_scale')
 
         self.MAX_FIY_DISTANCE = self.TIME_SLOT * self.UAV_SPEED / self.SCALE
 
@@ -472,6 +465,7 @@ class EnvMobile():
                 weight = 1 if not self.WEIGHTED_MODE else self._poi_weight[poi_index]
 
                 for u in range(update_user_num):  # 对于被uav选中服务的poi，可以多次收集它的包，直到collect_time被消耗完~~
+                    # TODO 看下对于被选中的用户，收集的包数占队列中剩余包数的比例，是不是太大了，如果是的话可以调低TIME_SLOT
                     # 每收集一个poi的一个包，now_time就会增加delta_t, 因此这个break是经常触发的
                     if now_time + delta_t >= (self.step_count + 1) * self.TIME_SLOT:
                         break
@@ -555,8 +549,6 @@ class EnvMobile():
             self.uav_energy[uav_index] - energy_consuming, 0)
 
         if self._is_uav_out_of_energy(uav_index):
-            # if self.DEBUG_MODE:
-            #     print("Energy should not run out!")
             self.dead_uav_list[uav_index] = True
             self.uav_state[uav_index].append(0)
         else:
@@ -621,10 +613,8 @@ class EnvMobile():
         return obs_dict
 
     def get_obs_agent(self, agent_id, cluster_id=-1, global_view=False, visit_num=None):
-
         if visit_num is None:
             visit_num = self.POI_VISIBLE_NUM
-
         if global_view:
             distance_limit = 1e10
         else:
@@ -635,7 +625,6 @@ class EnvMobile():
         poi_value_all = self.poi_value
 
         obs = []
-
         for i in range(self.UAV_NUM):
             if i == agent_id:
                 obs.append(self.uav_position[i][0] / self.MAP_X)  # 送入obs时对位置信息进行归一化，合理

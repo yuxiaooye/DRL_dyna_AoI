@@ -45,15 +45,14 @@ def main(args):
 
     json_file = osp.join(args.output_dir, 'params.json')
     with open(json_file, 'r') as f:
-        result = json.load(f)
-        args.setting_dir = result['setting_dir']
-        args.dataset = result['args']['dataset']
-        env_config = result['my_env_config']
+        params = json.load(f)
+        args.setting_dir = params['setting_dir']
+        args.dataset = params['args']['dataset']
+        env_config = params['env_config']
         data_file_dir = f'envs/{args.dataset}'
-        poi_QoS = np.load(os.path.join(data_file_dir, 'poi_QoS.npy'))
+        poi_QoS = np.load(os.path.join(data_file_dir, f"poi_QoS{params['args']['dyna_level']}.npy"))
         # TODO 从外存读入poi_QoS之后 在后面怎么读它？不过关于可视化的东西可以后面再写，先把实验跑上~~
     num_uav = env_config['num_uav']
-    num_agent = num_uav
     num_poi = env_config['num_poi']
     num_timestep = env_config['num_timestep']
 
@@ -97,26 +96,16 @@ def main(args):
 
     # fillin positions for uav, human
     mixed_df = pd.DataFrame()
-    for id in range(num_agent + num_poi):
+    for id in range(num_uav + num_poi):
         df = pd.DataFrame(
             {'id': id,
              't': pd.date_range(start='20230315090000', end=None, periods=num_timestep+1, freq='15s'),
-             'thr_demand': [None for _ in range(num_timestep+1)]  # 只有human对应的该属性有意义
              }
         )
         if id < num_uav:  # uav
             df['longitude'], df['latitude'] = uav_trajs[id][:, 0], uav_trajs[id][:, 1]  # x=lat, y=lon
         else:  # human
-            # 方式一 从静态的human_df读入。状态：deprecated
-            # a, b = rm.pygamexy2lonlat(human_df[human_df['id'] == id - num_agent].px[:env_config['num_timestep']+1],
-            #                                                      human_df[human_df['id'] == id - num_agent].py[:env_config['num_timestep']+1])
-            # df['longitude'], df['latitude'] = a.values, b.values  # 这里如果不加values，只有第一个human能赋值成功，后面的human全是nan
-            # 方式二 从poi_trajs读入
-            df['longitude'], df['latitude'] = poi_trajs[id - num_agent][:, 0], poi_trajs[id - num_agent][:, 1]
-            try:
-                df['thr_demand'] = poi_trajs[id - num_agent][:, 3]
-            except:
-                df['thr_demand'] = [5e8 for _ in range(num_timestep+1)]
+            df['longitude'], df['latitude'] = poi_trajs[id - num_uav][:, 0], poi_trajs[id - num_uav][:, 1]
         mixed_df = mixed_df.append(df)
 
     # positions to traj
@@ -131,8 +120,8 @@ def main(args):
                 color = uv_color_dict[list(uv_color_dict.keys())[index]]
             else:
                 color = '#%02X%02X%02X' % (255, 0, 0)
-        elif num_agent <= index:
-            name = f"Human {index - num_agent}"
+        elif num_uav <= index:
+            name = f"Human {index - num_uav}"
             color = '#%02X%02X%02X' % (0, 0, 0)
         else:
             raise ValueError
@@ -140,18 +129,21 @@ def main(args):
 
     for index, traj in enumerate(trajs.trajectories):
         name, color = get_name_color_by_index(index)
-        features = traj_to_timestamped_geojson(index, traj, num_uav, num_agent, color)
-        TimestampedGeoJson(
-            {
-                "type": "FeatureCollection",
-                "features": features,
-            },
-            period="PT15S",
-            add_last_point=True,
-            transition_time=200,  # The duration in ms of a transition from between timestamps.
-            max_speed=0.2,
-            loop=True,
-        ).add_to(map)
+        features = traj_to_timestamped_geojson(index, traj, poi_QoS, num_uav, color)
+        try:
+            TimestampedGeoJson(
+                {
+                    "type": "FeatureCollection",
+                    "features": features,
+                },
+                period="PT15S",
+                add_last_point=True,
+                transition_time=200,  # The duration in ms of a transition from between timestamps.
+                max_speed=0.2,
+                loop=True,
+            ).add_to(map)
+        except:
+            pass
 
         # line for uav
         if args.draw_uav_lines and index < num_uav:
@@ -172,7 +164,7 @@ def main(args):
         map.get_root().save(vsave_dir + f'/{args.traj_filename[:-4]}{arg_postfix}.html')
     else:
         if not osp.exists(args.group_save_dir): os.makedirs(args.group_save_dir)
-        # postfix = get_save_postfix_by_copo_tune(result['args'])  # note: only use this line when group=hypertune, otherwise use next line
+        # postfix = get_save_postfix_by_copo_tune(params['args'])  # note: only use this line when group=hypertune, otherwise use next line
         postfix = args.output_dir.split('/')[-1]
         save_file = os.path.join(args.group_save_dir, f'{arg_postfix}.html')
         print('------args.group_save_dir = ', args.group_save_dir)

@@ -58,9 +58,9 @@ def yyx_get_env_args(args):
     from env_configs.utils.my_utils import fillin_lazy_args, import_env_config, env_config_wrapper
     from env_configs.config.main_config import rllib_env_config as yyx_args
     args = fillin_lazy_args(args, dataset_str=args.dataset)
-    my_env_config = import_env_config(args.dataset, args)
-    my_env_config = env_config_wrapper(my_env_config, args.num_uv, args.sinr_demand, args.num_serviced_pois, args.uav_height)
-    yyx_args['my_env_config'] = my_env_config
+    env_config = import_env_config(args.dataset, args)
+    env_config = env_config_wrapper(env_config, args.num_uv, args.sinr_demand, args.num_serviced_pois, args.uav_height)
+    yyx_args['env_config'] = env_config
     yyx_args['args'] = args
 
     # hook the params
@@ -75,15 +75,9 @@ def test(data_amount=1, uav_num=3, bar=100, snr=500):
     print('uav_num:{},snr:{},data_amount:{},bar:{}'.format(uav_num, snr, data_amount, bar))
     yyx_args = yyx_get_env_args(parse_args())
     hao_args = {
-        'test_mode': True,
         'save_path': '.',
-        "controller_mode": True,
-        "seed": 1,
         "action_mode": 3,
         "weighted_mode": True,
-        "mip_mode": False,
-        "noisy_power": -90,
-        "tx_power": 20,
         "render_mode": True,
         #
         "user_data_amount": data_amount,
@@ -91,7 +85,7 @@ def test(data_amount=1, uav_num=3, bar=100, snr=500):
         "emergency_threshold": bar,
         "collect_range": snr,
         # yyx add
-        "max_episode_step": yyx_args['my_env_config']['num_timestep'],
+        "max_episode_step": yyx_args['env_config']['num_timestep'],
     }
     
     env = EnvMobile(

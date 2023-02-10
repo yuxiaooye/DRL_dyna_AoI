@@ -1,6 +1,5 @@
 from shapely.geometry import Point
 import folium
-from env_configs.envs.coverage_env.coverage_utils import Coverage
 
 
 class Roadmap():
@@ -70,36 +69,31 @@ def get_map_props():
     }
     return map_props
 
-def traj_to_timestamped_geojson(index, trajectory, num_uav, num_agent, color, only_UVs=False):  # indextrajindexenum
-    '''
-    :param only_UVs:  设为False时，只画无人设备的动点，不画人的
-    :return:
-    '''
+def traj_to_timestamped_geojson(index, trajectory, poi_QoS, num_uav, color):  # indextrajindexenum
 
     point_gdf = trajectory.df.copy()
-    point_gdf["previous_geometry"] = point_gdf["geometry"].shift()
-    point_gdf["time"] = point_gdf.index  # datetimeindex
-    point_gdf["previous_time"] = point_gdf["time"].shift()
+    # point_gdf["previous_geometry"] = point_gdf["geometry"].shift()
+    # point_gdf["time"] = point_gdf.index  # datetimeindex
+    # point_gdf["previous_time"] = point_gdf["time"].shift()
 
     features = []
     # for Point in GeoJSON type
-    for _, row in point_gdf.iterrows():
-        if only_UVs and index >= num_agent: break
+    for i, (current_time, row) in enumerate(point_gdf.iterrows()):  # 遍历一个人的不同时间步
+        # print('i=', i, 'poi_QoS.len=', len(poi_QoS[0]))
+        # current_time每隔两个item数值才真的会变化，不影响目前的程序逻辑，不过可以看下数据集还有没有挖掘的潜力
         current_point_coordinates = [row["geometry"].xy[0][0], row["geometry"].xy[1][0]]
-        current_time = [row["time"].isoformat()]
-        thr_demand = row['thr_demand']
-
-        coverage = Coverage()
-        ra = {'uav': 5, 'car': 7, 'human': coverage.folium_poi_radius_mapping.get(thr_demand)}  # 之前human的radius恒为2
-        op = {'uav': 1, 'car': 1, 'human': 1}
+        ra = {'uav': 5, 'human': 1}
+        op = {'uav': 1, 'human': 1}
 
         if index < num_uav:  # UAV
             radius, opacity = ra['uav'], op['uav']
-        elif num_uav <= index < num_agent:  # CAR
-            radius, opacity = ra['car'], op['car']
         else:  # human
+            # case1 fixed OK
             radius, opacity = ra['human'], op['human']
-
+            # case2 dyna 能跑通，但html中画不出点
+            QoS = poi_QoS[index-num_uav][min(i, len(poi_QoS[0])-1)]  # 防止数组越界
+            # radius, opacity = (200 - QoS)/100 + 1, op['human']
+            radius, opacity = (200 - QoS)/50 + 2, op['human']  # 硬编码以适配dyna_level=3
 
         # for Point in GeoJSON type  (Temporally Deprecated)
         features.append(  #
@@ -110,7 +104,7 @@ def traj_to_timestamped_geojson(index, trajectory, num_uav, num_agent, color, on
                     "coordinates": current_point_coordinates,
                 },
                 "properties": {
-                    "times": current_time,
+                    "times": [current_time.isoformat()],
                     "icon": 'circle',  # point
                     "iconstyle": {
                         'fillColor': color,
