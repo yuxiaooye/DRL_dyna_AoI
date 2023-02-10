@@ -15,7 +15,7 @@ def gen():
     T = 120
     # 分为三部分，一部分逐渐400 -> 200且权重增加，一部分逐渐200 -> 400且权重降低，另一部分固定300不变，权重不变
     # 预期结果：无人机前期重点关注第二类，后期重点关注第一类
-    if args.dyna_level == '':
+    if args.dyna_level == '1':
         case1 = np.linspace(400, 200, T)
         case2 = np.linspace(200, 400, T)
         case3 = np.ones((T,)) * 300

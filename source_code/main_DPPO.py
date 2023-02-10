@@ -108,7 +108,7 @@ def override(alg_args, run_args, env_fn_train, input_args):
     # tune env
     if input_args.snr != 200:
         run_args.name += f'_SNR={input_args.snr}'
-    if input_args.dyna_level != '':
+    if input_args.dyna_level != '2':
         run_args.name += f'_DynaLevel={input_args.dyna_level}'
     if input_args.init_energy != 719280:
         run_args.name += f'_InitEnergy={input_args.init_energy}'
@@ -159,7 +159,7 @@ def parse_args():
     # tune env
     parser.add_argument('--snr', type=float, default=200)
     parser.add_argument('--init_energy', type=float, default=719280)
-    parser.add_argument('--dyna_level', type=str, default='', help='指明读取不同难度的poi_QoS.npy')
+    parser.add_argument('--dyna_level', type=str, default='2', help='指明读取不同难度的poi_QoS.npy')
     parser.add_argument('--user_data_amount', type=int, default=1)
     parser.add_argument('--update_num', type=int, default=10)
 
