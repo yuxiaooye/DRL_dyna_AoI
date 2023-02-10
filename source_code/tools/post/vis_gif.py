@@ -2,23 +2,18 @@
 # -*-coding:utf-8-*-
 
 import sys
-import time
-# from selenium import webdriver
 import numpy as np
-import math
 import os
 import os.path as osp
-
-assert os.getcwd().endswith('source_code'), '请将工作路径设为source_code'
-
 import json
 import folium
 import pandas as pd
 import geopandas as gpd
 import movingpandas as mpd
 from folium.plugins import TimestampedGeoJson
+assert os.getcwd().endswith('source_code'), '请将工作路径设为source_code'
 sys.path.append(os.getcwd())
-from env_configs.envs.roadmap_env.roadmap_utils import *
+from env_configs.roadmap_env.roadmap_utils import *
 
 import argparse
 parser = argparse.ArgumentParser()

@@ -1,28 +1,17 @@
 from envs.config_3d import Config
 
-from pandas import Interval
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
 import copy
-import random
-import gym
-import pickle
 import math
-import sys
 import warnings
 import torch
-import operator
-import traceback
-from functools import reduce
 
-from itertools import combinations
-from gym.utils import seeding
 from gym import spaces
-import sys
 import os
 import os.path as osp
-from env_configs.envs.roadmap_env.roadmap_utils import Roadmap
+from env_configs.roadmap_env.roadmap_utils import Roadmap
 
 
 project_dir = osp.dirname(osp.dirname(__file__))
