@@ -48,7 +48,7 @@ class Config(object):
             "max_episode_step": 120,  # 适配NCSU中的human.csv~~
             "add_emergency": False,
             "concat_obs": True,
-            "weighted_mode": True,
+            "weighted_mode": False,  # 先尽量简化问题。本想让weight反比于SNRth，但随着时间在变，不方便~
             "poi_visible_num": -1,
             "small_obs_num": -1,
 

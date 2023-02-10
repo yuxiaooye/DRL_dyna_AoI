@@ -85,10 +85,10 @@ def override(alg_args, run_args, env_fn_train, input_args):
         alg_args.n_model_update_warmup = 3
         alg_args.n_warmup = 1
         # 不过n_iter*rollout_length得比一个episode长，不然一次done都不触发，train_trajs不会保存到外存
-        alg_args.n_iter = 10
+        alg_args.n_iter = 5
         alg_args.n_test = 1
         alg_args.n_traj = 4
-        alg_args.n_inner_iter = 10
+        alg_args.n_inner_iter = 2
     if run_args.test:  # here it's what I want!
         run_args.debug = True
         alg_args.n_warmup = 0
@@ -219,7 +219,6 @@ bar = 100
 env_args = {  # 这里环境类的参数抄昊宝
     "controller_mode": True,
     "action_mode": 3,
-    "weighted_mode": True,
     "render_mode": True,
     "emergency_threshold": bar,
     "collect_range": input_args.snr,

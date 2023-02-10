@@ -90,7 +90,7 @@ class OnPolicyRunner:
     def run(self):  # 被launcher.py调用的主循环，在内部调用rollout_env或rollout_model
         # 如果model-based且train from scratch的话，先warmup
         if self.model_based and not self.load_pretrained_model:
-            for _ in trange(self.n_warmup):  # 50
+            for _ in trange(self.n_warmup, desc='warmup'):  # 50
                 trajs = self.rollout_env()
                 self.model_buffer.storeTrajs(trajs)
             # 参数是更新多少次，每次更新时，从traj采样一个batchsize更新
@@ -101,7 +101,7 @@ class OnPolicyRunner:
             print('test episode reward: ', ret)
             return
 
-        for iter in trange(self.n_iter):
+        for iter in trange(self.n_iter, desc='rollout env'):
             if iter % 50 == 0:
                 mean_return = self.test()
                 self.agent.save(info=mean_return)  # 这个是保存模型么？
@@ -120,7 +120,7 @@ class OnPolicyRunner:
 
             agentInfo = []
             real_trajs = trajs
-            for inner in trange(self.n_inner_iter):
+            for inner in trange(self.n_inner_iter, desc='inner-iter updateAgent'):
                 if self.model_based:
                     ## Use the model with a certain probability                  
                     use_model = np.random.uniform() < self.model_prob
@@ -150,7 +150,7 @@ class OnPolicyRunner:
         scaled = []
         lengths = []
         episodes = []
-        for i in trange(self.n_test):
+        for i in trange(self.n_test, desc='test'):
             episode = []
             done, ep_ret, ep_len = np.array([False]), 0, 0  # done就是把标量包装成array
             env = self.env_test

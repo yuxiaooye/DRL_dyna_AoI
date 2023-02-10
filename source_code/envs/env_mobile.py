@@ -102,9 +102,9 @@ class EnvMobile():
         self.poi_mat = self._init_pois(data_file_dir)  # this mat is **read-only**
         self.debug_index = self.poi_mat[:,0,:].sum(axis=-1).argmin()  # tmp
         # == OK 对读的这几个列表进行裁剪，时间步240->121，poi数244->33 ==
-        self.poi_position = copy.deepcopy(self.poi_mat[:, 0, :].reshape(1, -1, 2))  # 0意为t=0时poi的初始位置
+        self.poi_position = copy.deepcopy(self.poi_mat[:, 0, :])  # 0意为t=0时poi的初始位置
         self.poi_arrival = np.load(os.path.join(data_file_dir, 'arrival.npy'))[:self.POI_NUM, :self.max_episode_steps + 1]  # shape = (33, 121)，其中33是poi数，121是episode的时间步数
-        # TODO 权重改为不读外存而是就正比于QoS的倒数
+        # 权重在计算reward和metric时用到，先简化问题 不用权重
         self.poi_weight = np.load(os.path.join(data_file_dir, 'poi_weights.npy'))[:self.POI_NUM]
         self.poi_QoS = np.load(os.path.join(data_file_dir, f'poi_QoS{self.input_args.dyna_level}.npy'))
         assert self.poi_QoS.shape == (self.POI_NUM, self.MAX_EPISODE_STEP)
@@ -196,7 +196,7 @@ class EnvMobile():
         for uav_index in range(self.UAV_NUM):
             self.uav_trace[uav_index].append(self.uav_position[uav_index].tolist())
         self.poi_history.append({
-            'pos': copy.deepcopy(self.poi_position).reshape(-1, 2),
+            'pos': copy.deepcopy(self.poi_position),
             'val': copy.deepcopy(np.array([0 for _ in range(self.POI_NUM)])).reshape(-1),
             'aoi': np.array([0 for _ in range(self.POI_NUM)])
         })
@@ -211,11 +211,9 @@ class EnvMobile():
         pass
 
     def _human_move(self):
-        self.poi_position = copy.deepcopy(self.poi_mat[:, self.step_count, :].reshape(1, -1, 2))
+        self.poi_position = copy.deepcopy(self.poi_mat[:, self.step_count, :])
 
     def step(self, action):
-        if self.debug:
-            print(self.poi_position.mean())
         # 若max_episode_step=120, 则执行120次step方法。episode结束时保存120个poi和uav的位置点，而不是icde的121个，把poi、uav的初始位置扔掉！
         self.step_count += 1
 
@@ -245,7 +243,7 @@ class EnvMobile():
             # 打印发现要么是12.5，要么是20，昊宝用的是周围若干个点的离散动作，distance只有两种情况
             collect_time = max(0, self.TIME_SLOT - distance / self.UAV_SPEED) if not Flag else 0
             r, uav_data_collect[uav_index] = self._collect_data_from_poi(  # 调用关键函数，uav收集
-                uav_index, 0, collect_time)
+                uav_index, collect_time)
 
             self.uav_data_collect[uav_index].append(
                 uav_data_collect[uav_index])
@@ -279,7 +277,7 @@ class EnvMobile():
             aoi_list.append(aoi)
 
         self.poi_history.append({
-            'pos': copy.deepcopy(self.poi_position).reshape(-1, 2),
+            'pos': copy.deepcopy(self.poi_position),
             'val': copy.deepcopy(user_num).reshape(-1),
             'aoi': np.array(aoi_list)
         })
@@ -327,7 +325,10 @@ class EnvMobile():
         return self.get_obs_from_outside(), uav_reward, done, info
 
     def summary_info(self, info):
-        poi_weights = copy.deepcopy(self.poi_weight) / np.mean(self.poi_weight)
+        if self.WEIGHTED_MODE:
+            poi_weights = copy.deepcopy(self.poi_weight) / np.mean(self.poi_weight)  # 权重归一化
+        else:
+            poi_weights = [1 for _ in range(self.POI_NUM)]
         t_e = np.sum(np.sum(self.uav_energy_consuming_list))
         total_arrive_user = 0
         collect_user = 0
@@ -409,11 +410,11 @@ class EnvMobile():
 
         return new_x, new_y, distance, min(self.uav_energy[uav_index], energy_consume)
 
-    def _collect_data_from_poi(self, uav_index, cluster_index=-1, collect_time=0):
+    def _collect_data_from_poi(self, uav_index, collect_time=0):
         position_list = []
         reward_list = []
         if collect_time >= 0:
-            for poi_index, (poi_position, poi_value) in enumerate(zip(self.poi_position[cluster_index], self.poi_value)):
+            for poi_index, (poi_position, poi_value) in enumerate(zip(self.poi_position, self.poi_value)):
                 d = self._cal_distance(
                     poi_position, self.uav_position[uav_index])
                 self.debug_all_d.append(d)
@@ -431,7 +432,7 @@ class EnvMobile():
             for i in range(update_num):
                 poi_index = position_list[i][0]  # 首次到达断点时，poi_index = 128
                 rate = self._get_data_rate(
-                    self.uav_position[uav_index], self.poi_position[cluster_index][poi_index])
+                    self.uav_position[uav_index], self.poi_position[poi_index])
                 if rate <= self.RATE_THRESHOLD:  # RATE_THRESHOLD = 0.05
                     rate = 0
                 update_user_num = min(50, len(self.poi_value[poi_index]))
@@ -585,7 +586,6 @@ class EnvMobile():
         return obs_dict
 
     def get_obs_agent(self, agent_id, global_view=False, visit_num=None):
-
         if visit_num is None:
             visit_num = self.POI_VISIBLE_NUM  # -1
         if global_view:  # False
@@ -593,8 +593,7 @@ class EnvMobile():
         else:
             distance_limit = self.agent_field
 
-        cluster_id = 0
-        poi_position_all = self.poi_position[cluster_id]
+        poi_position_all = self.poi_position
         poi_value_all = self.poi_value
 
         obs = []
@@ -638,7 +637,7 @@ class EnvMobile():
 
         else:
             position_list = []
-            for poi_index, (poi_position, poi_value) in enumerate(zip(self.poi_position[cluster_id], self.poi_value)):
+            for poi_index, (poi_position, poi_value) in enumerate(zip(self.poi_position, self.poi_value)):
                 d = self._cal_distance(poi_position, self.uav_position[agent_id])
                 if d < distance_limit:
                     position_list.append((poi_index, d))
