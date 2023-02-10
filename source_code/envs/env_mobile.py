@@ -149,7 +149,8 @@ class EnvMobile():
         self.obs_space = spaces.Dict(obs_dict)
         self.observation_space = self.obs_space
 
-        self.obs_for_outside = None  # yyx add
+        self.obs = None
+        self.stacked_obs = None
         self.reset()
 
     def _init_pois(self, setting_dir):
@@ -236,7 +237,8 @@ class EnvMobile():
 
         self.check_arrival(self.step_count)
         # self.cpu_preprocessor.reset()
-        return self.get_obs()
+        self.stacked_obs = [None for _ in range(4)]
+        self.get_obs()
 
     def render(self, mode='human'):
         pass
@@ -354,11 +356,10 @@ class EnvMobile():
 
         global_reward = np.mean(uav_reward) + np.mean(uav_penalty)  # 可优化的代码 后一项事实上恒为0 事实上把penalty归入前一项reward中
 
-        obs = self.get_obs(None, None)
-        obs = torch.tensor(obs['Box']).float()
+        self.get_obs()
         self.episodic_reward_list.append(global_reward)
         # reward_new = [global_reward] + uav_reward.tolist()
-        return obs, uav_reward, done, info  # yyx改为只包含各agent的reward，不知道昊哥还输出全局reward是做什么
+        return self.get_obs_from_outside(), uav_reward, done, info
 
     def summary_info(self, info):
         poi_weights = copy.deepcopy(self._poi_weight) / np.mean(self._poi_weight)
@@ -595,7 +596,10 @@ class EnvMobile():
         return data_rate / 1e6
 
     def get_obs_from_outside(self):  # yyx add
-        return self.obs_for_outside
+        if self.args.debug_use_stack_frame:
+            return torch.concat(self.stacked_obs, dim=-1)  # shape = (3, obs_dim*4)
+        else:
+            return self.obs  # shape = (3, obs_dim)
 
     def get_obs(self, aoi_now=None, aoi_next=None):
         agents_obs = [self.get_obs_agent(i) for i in range(self.UAV_NUM)]  # 每个元素shape = (1715, )
@@ -607,7 +611,13 @@ class EnvMobile():
         }
         if self.SMALL_OBS_NUM != -1:
             obs_dict = {'SmallBox': np.vstack([self.get_obs_agent(i, visit_num=self.SMALL_OBS_NUM) for i in range(self.UAV_NUM)]), **obs_dict}
-        self.obs_for_outside = torch.tensor(obs_dict['Box']).float()  # yyx add
+        self.obs = torch.tensor(obs_dict['Box']).float()  # yyx add
+        if self.step_count == 0:
+            self.stacked_obs = [self.obs for _ in range(4)]
+        else:
+            self.stacked_obs.pop()
+            self.stacked_obs.append(self.obs)
+
         return obs_dict
 
     def get_obs_agent(self, agent_id, cluster_id=-1, global_view=False, visit_num=None):

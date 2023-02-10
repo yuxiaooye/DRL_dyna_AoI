@@ -74,6 +74,9 @@ def initArgs(run_args, env_train, env_test, input_arg):
 
     # 在这里，得到了alg_args.agent_args.action_space
     alg_args = config.getArgs(run_args.radius_p, run_args.radius_v, run_args.radius_pi, ref_env)
+
+    # yyx add
+    alg_args.debug_use_stack_frame = input_arg.debug_use_stack_frame
     return alg_args
 
 
@@ -128,6 +131,8 @@ def override(alg_args, run_args, env_fn_train, input_args):
         run_args.name += f'_InitEnergy={input_args.init_energy}'
     if input_args.dyna_level != '':
         run_args.name += f'_DynaLevel={input_args.dyna_level}'
+    if input_args.debug_use_stack_frame:
+        run_args.name += f'_UseStackFrame'
     run_args.output_dir = '../{}/{}'.format(input_args.output_dir, run_args.name)
 
     alg_args.algo = input_args.algo
@@ -157,6 +162,7 @@ def parse_args():
     # tune algo
     parser.add_argument('--lr', type=float)
     parser.add_argument('--lr_v', type=float)
+    parser.add_argument('--debug_use_stack_frame', action='store_true')
     # tune env
     parser.add_argument('--snr', type=float, default=200)
     parser.add_argument('--init_energy', type=float, default=719280)

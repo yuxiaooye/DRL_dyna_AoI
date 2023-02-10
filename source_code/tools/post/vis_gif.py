@@ -8,10 +8,9 @@ import numpy as np
 import math
 import os
 import os.path as osp
-import matplotlib.pyplot as plt
-# print('--------当前os.getcwd()是', os.getcwd())
-# os.chdir('/data1/yyx/tethered-uav/source_code')  # 在服务器运行时，硬编码路径，否则无法找到src包
-# print('--------当前os.getcwd()是', os.getcwd())
+
+assert os.getcwd().endswith('source_code'), '请将工作路径设为source_code'
+
 import json
 import folium
 import pandas as pd
@@ -19,7 +18,6 @@ import geopandas as gpd
 import movingpandas as mpd
 from folium.plugins import TimestampedGeoJson
 sys.path.append(os.getcwd())
-from env_configs.envs.noma_env.utils import *
 from env_configs.envs.roadmap_env.roadmap_utils import *
 
 import argparse
@@ -31,30 +29,16 @@ parser.add_argument("--draw_uav_lines", default=True, action='store_false')
 parser.add_argument("--diff_color", default=True, action='store_false')
 
 args = parser.parse_args()
-args.group_save_dir = args.output_dir  # 1201 硬编码
+args.group_save_dir = args.output_dir
 
 def get_arg_postfix(args):
     arg_postfix = ''
     if args.draw_uav_lines:
         arg_postfix += '_drawUavLines'
-    if not args.diff_color:
-        arg_postfix += '_NotDiffColor'
     return arg_postfix
 
-def get_save_postfix_by_copo_tune(exp_args):
-    postfix = ''
-    postfix += '_' + str(exp_args['eoi3_coef'])
-    postfix += '_SL' if exp_args['share_layer'] else ''
-    postfix += '_CC' if exp_args['use_ccobs'] else ''
-    return postfix
-
-def get_save_postfix_by_sinr_demand(exp_args):
-    postfix = ''
-    postfix += '_' + str(exp_args['sinr_demand'])
-    return postfix
 
 def main(args):
-    # os.chdir('../../')  # 在服务器时注释该行
     traj_file = osp.join(args.output_dir, f'{args.tag}_saved_trajs/{args.traj_filename}')
     trajs = np.load(traj_file)
     poi_trajs, uav_trajs = list(trajs['arr_0']), list(trajs['arr_1'])  # 当人也在动时，这里也需要读poi_trajs
@@ -65,7 +49,7 @@ def main(args):
         args.setting_dir = result['setting_dir']
         args.dataset = result['args']['dataset']
         env_config = result['my_env_config']
-        data_file_dir = f'adept/env/env_ucs/util/{args.dataset}'
+        data_file_dir = f'envs/{args.dataset}'
         poi_QoS = np.load(os.path.join(data_file_dir, 'poi_QoS.npy'))
         # TODO 从外存读入poi_QoS之后 在后面怎么读它？不过关于可视化的东西可以后面再写，先把实验跑上~~
     num_uav = env_config['num_uav']
@@ -111,7 +95,6 @@ def main(args):
         'uav3': '#%02X%02X%02X' % (0, 0, 255),  # blue
     }
 
-    # human_df = pd.read_csv(osp.join(args.setting_dir, 'human.csv'))
     # fillin positions for uav, human
     mixed_df = pd.DataFrame()
     for id in range(num_agent + num_poi):
@@ -198,7 +181,7 @@ def main(args):
         print('------save_file = ', save_file)
         map.get_root().save(save_file)
 
-    print(1)
+    print('OK!')
 
 
 

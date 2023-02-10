@@ -58,6 +58,7 @@ class OnPolicyRunner:
         self.test_length = alg_args.test_length
         self.max_episode_len = alg_args.max_episode_len
         self.clip_scheme = None if (not hasattr(alg_args, "clip_scheme")) else alg_args.clip_scheme
+        self.debug_use_stack_frame = alg_args.debug_use_stack_frame
 
         # environment initialization
         self.env_learn = env_learn
