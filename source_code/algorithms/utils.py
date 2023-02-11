@@ -5,7 +5,7 @@ import numpy as np
 import torch
 import wandb
 import time
-from torch.utils.tensorboard import SummaryWriter
+from tensorboardX import SummaryWriter
 
 import gc
 import torch
@@ -452,7 +452,7 @@ class LogServer(object):
                 config={"run_args": run_args._toDict(recursive=True),
                         "algo_args": algo_args._toDict(recursive=True)},
                 name=run_args.name,
-                group='{}-{}-{}'.format(algo_args.algo, algo_args.env_fn.__name__, run_args.group),  # 算法名+环境名+自定义后缀
+                group=run_args.group,  # 仅写自定义组名即可，环境名恒不变，算法名在runs名称中记录
                 dir='../wandb',  # dont save at source_code, keep it clean!
             )
             self.wandb_logger = run
@@ -492,7 +492,7 @@ class LogServer(object):
 
             if isinstance(data[log_key], torch.Tensor) and len(data[log_key].shape) > 0 or \
                     isinstance(data[log_key], np.ndarray) and len(data[log_key].shape) > 0:
-                # TODO 这里报错，可能是wandb打点有异常的原因
+                # 这里报错，先注释掉，反正我也不看
                 # TypeError: No loop matching the specified signature and casting was found for ufunc greater
                 # self.writer.add_histogram(log_key, data[log_key], self.step)
                 pass

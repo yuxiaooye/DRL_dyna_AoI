@@ -701,3 +701,9 @@ class EnvMobile():
         save_traj_dir = osp.join(self.input_args.output_dir, f'{self.phase}_saved_trajs')
         if not osp.exists(save_traj_dir): os.makedirs(save_traj_dir)
         np.savez(osp.join(save_traj_dir, f'eps_{postfix}.npz'), self.poi_mat, np.array(self.uav_trace))
+
+        if is_newbest:  # OK   # add call vis_gif.py
+            # os.system(f"python tools/post/vis_gif.py --output_dir {self.input_args.output_dir}")
+            from tools.post.vis_gif import render_HTML
+            render_HTML(self.input_args.output_dir, tag=self.phase)
+            print('call vis.gif along with the training')

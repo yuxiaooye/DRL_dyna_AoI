@@ -11,36 +11,21 @@ import pandas as pd
 import geopandas as gpd
 import movingpandas as mpd
 from folium.plugins import TimestampedGeoJson
+import argparse
+
 assert os.getcwd().endswith('source_code'), '请将工作路径设为source_code'
 sys.path.append(os.getcwd())
 from env_configs.roadmap_env.roadmap_utils import *
 
-import argparse
-parser = argparse.ArgumentParser()
-parser.add_argument("--output_dir")
-parser.add_argument("--tag", type=str, default='train', choices=['train', 'test'], help='load trajs from train or test')
-parser.add_argument("--traj_filename", type=str, default='eps_best.npz', help='load which .npz file')
-parser.add_argument("--draw_uav_lines", default=True, action='store_false')
-parser.add_argument("--diff_color", default=True, action='store_false')
-
-args = parser.parse_args()
-args.group_save_dir = args.output_dir
-
-def get_arg_postfix(args):
-    arg_postfix = ''
-    if args.draw_uav_lines:
-        arg_postfix += '_drawUavLines'
-    return arg_postfix
-
-
-def main(args):
-    '''从args.output_dir中拿到轨迹'''
-    traj_file = osp.join(args.output_dir, f'{args.tag}_saved_trajs/{args.traj_filename}')
+# TODO 这个函数也需要被环境调用，边训练边画图~~
+def render_HTML(output_dir, tag, traj_filename='eps_best.npz'):
+    '''从output_dir中拿到轨迹'''
+    traj_file = osp.join(output_dir, f'{tag}_saved_trajs/{traj_filename}')
     trajs = np.load(traj_file)
     poi_trajs, uav_trajs = list(trajs['arr_0']), list(trajs['arr_1'])  # 当人也在动时，这里也需要读poi_trajs
 
     '''从params.json中拿到训练时参数'''
-    json_file = osp.join(args.output_dir, 'params.json')
+    json_file = osp.join(output_dir, 'params.json')
     with open(json_file, 'r') as f:
         params = json.load(f)
         input_args = params['input_args']
@@ -62,8 +47,8 @@ def main(args):
 
     grid_geo_json = get_border(rm.upper_right, rm.lower_left)
     color = "red"
-    weight = 4 if 'NCSU' in args.output_dir else 2  # 2 by default
-    dashArray = '10,10' if 'NCSU' in args.output_dir else '5,5'  # '5,5' by default
+    weight = 4 if 'NCSU' in output_dir else 2  # 2 by default
+    dashArray = '10,10' if 'NCSU' in output_dir else '5,5'  # '5,5' by default
     border = folium.GeoJson(grid_geo_json,
                             style_function=lambda feature, color=color: {
                                 'fillColor': color,
@@ -82,7 +67,6 @@ def main(args):
         for ts in range(len(poi_trajs[0])):
             poi_trajs[id][ts][:2] = rm.pygamexy2lonlat(*poi_trajs[id][ts][:2])
 
-
     uv_color_dict = {
         'uav1': '#%02X%02X%02X' % (255, 0, 0),  # red
         'uav2': '#%02X%02X%02X' % (3, 204, 51),  # green
@@ -94,7 +78,7 @@ def main(args):
     for id in range(uav_num + poi_num):
         df = pd.DataFrame(
             {'id': id,
-             't': pd.date_range(start='20230315090000', end=None, periods=num_timestep+1, freq='15s'),
+             't': pd.date_range(start='20230315090000', end=None, periods=num_timestep + 1, freq='15s'),
              }
         )
         if id < uav_num:  # uav
@@ -111,10 +95,8 @@ def main(args):
     def get_name_color_by_index(index):
         if index < uav_num:
             name = f"UAV {index}"
-            if args.diff_color:
-                color = uv_color_dict[list(uv_color_dict.keys())[index]]
-            else:
-                color = '#%02X%02X%02X' % (255, 0, 0)
+            color = uv_color_dict[list(uv_color_dict.keys())[index]]
+
         elif uav_num <= index:
             name = f"Human {index - uav_num}"
             color = '#%02X%02X%02X' % (0, 0, 0)
@@ -124,26 +106,23 @@ def main(args):
 
     for index, traj in enumerate(trajs.trajectories):
         name, color = get_name_color_by_index(index)
-        # TODO 这里是否读poi_QoS，要看input_args中的--use_fixed_range开关
         features = traj_to_timestamped_geojson(index, traj, poi_QoS, uav_num, color,
                                                input_args, env_config)
-        try:
-            TimestampedGeoJson(
-                {
-                    "type": "FeatureCollection",
-                    "features": features,
-                },
-                period="PT15S",
-                add_last_point=True,
-                transition_time=200,  # The duration in ms of a transition from between timestamps.
-                max_speed=0.2,
-                loop=True,
-            ).add_to(map)
-        except:
-            pass
+
+        TimestampedGeoJson(  # 这里解注释了一个try except
+            {
+                "type": "FeatureCollection",
+                "features": features,
+            },
+            period="PT15S",
+            add_last_point=True,
+            transition_time=200,  # The duration in ms of a transition from between timestamps.
+            max_speed=0.2,
+            loop=True,
+        ).add_to(map)
 
         # line for uav
-        if args.draw_uav_lines and index < uav_num:
+        if index < uav_num:
             geo_col = traj.to_point_gdf().geometry
             for s in range(geo_col.shape[0] - 2):
                 xy = [[y, x] for x, y in zip(geo_col.x[s:s + 2], geo_col.y[s:s + 2])]
@@ -154,22 +133,22 @@ def main(args):
     folium.LayerControl().add_to(map)
 
     # save
-    arg_postfix = get_arg_postfix(args)
-    if args.group_save_dir is None:
-        vsave_dir = args.output_dir + f'/gif/{args.tag}_{args.traj_filename}'
-        if not osp.exists(vsave_dir): os.makedirs(vsave_dir)
-        map.get_root().save(vsave_dir + f'/{args.traj_filename[:-4]}{arg_postfix}.html')
-    else:
-        if not osp.exists(args.group_save_dir): os.makedirs(args.group_save_dir)
-        save_file = os.path.join(args.group_save_dir, f'{arg_postfix}.html')
-        print('------args.group_save_dir = ', args.group_save_dir)
-        print("------f'{arg_postfix}.html' = ", f'{arg_postfix}.html')
-        print('------save_file = ', save_file)
-        map.get_root().save(save_file)
+    save_file = os.path.join(output_dir, f'vis.html')
+    print('------save_file = ', save_file)
+    map.get_root().save(save_file)
 
     print('OK!')
 
 
 
 if __name__ == '__main__':
-    main(args)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--output_dir")
+    parser.add_argument("--tag", type=str, default='train', choices=['train', 'test'], help='load trajs from train or test')
+    args = parser.parse_args()
+
+    render_HTML(
+        args.output_dir,
+        args.tag,
+    )
+

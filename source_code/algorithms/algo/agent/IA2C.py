@@ -13,7 +13,7 @@ from algorithms.models import GaussianActor, GraphConvolutionalModel, MLP, Categ
 from algorithms.algo.yyx_agent_base import YyxAgentBase
 from tqdm.std import trange
 # from algorithms.algorithm import ReplayBuffer
-from ray.state import actors
+
 from gym.spaces.box import Box
 from gym.spaces.discrete import Discrete
 import torch

@@ -61,7 +61,7 @@ cd source_code
 python tools/post/vis_gif.py --output_dir <OUTPUT_DIR>
 ```
 
-在实验结果文件夹下生成`_drawUavLines.html`：
+在实验结果文件夹下生成`vis.html`：
 
 <img src="https://cdn.jsdelivr.net/gh/1candoallthings/figure-bed@main/img/202302081401687.png" alt="image-20230208140132293" style="zoom:33%;" />
 

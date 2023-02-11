@@ -101,7 +101,7 @@ def override(alg_args, run_args, env_fn_train, input_args):
 
     '''yyx add begin'''
     timenow = datetime.strftime(datetime.now(), "%Y-%m-%d_%H-%M-%S")
-    run_args.name = '{}_{}_{}'.format(timenow, env_fn_train.__name__, agent_fn.__name__)
+    run_args.name = '{}_{}'.format(timenow, agent_fn.__name__)
 
 
     # tune env
@@ -142,19 +142,17 @@ def parse_args():
 
     parser.add_argument('--debug', action='store_true', default=False, )
     parser.add_argument('--test', action='store_true', default=False, )
-
     parser.add_argument('--env', type=str, default='mobile')
     parser.add_argument('--algo', type=str, required=False, default='DPPO', help="algorithm(DMPO/IC3Net/CPPO/DPPO/IA2C) ")
     parser.add_argument('--device', type=str, required=False, default='cuda:0', help="device(cpu/cuda:0/cuda:1/...) ")
-
-    # dirs
     parser.add_argument("--dataset", type=str, default='NCSU', choices=['NCSU'])
+    # dirs
     parser.add_argument("--output_dir", type=str, default='runs/debug', help="which fold to save under 'runs/'")
-
-    parser.add_argument('--mute_wandb', default=False, action='store_true')
     parser.add_argument('--group', type=str, default='debug', help='填写我对一组实验的备注，作用与wandb的group和tb的实验保存路径')
+    # system stub
+    parser.add_argument('--mute_wandb', default=False, action='store_true')
+    # tune agent
     parser.add_argument('--init_checkpoint', type=str)  # load pretrained model
-
     # tune algo
     parser.add_argument('--lr', type=float)
     parser.add_argument('--lr_v', type=float)
