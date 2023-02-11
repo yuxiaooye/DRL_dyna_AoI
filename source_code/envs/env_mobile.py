@@ -50,8 +50,8 @@ class EnvMobile():
         self.POI_VISIBLE_NUM = self.config("poi_visible_num")
 
         self.UPDATE_NUM = self.config("update_num")
-        # self.COLLECT_RANGE = self.config("collect_range")
-        self.POI_NUM = self.config("poi_num")  
+        self.COLLECT_RANGE = self.config("collect_range")
+        self.POI_NUM = self.config("poi_num")
         self.RATE_THRESHOLD = self.config("rate_threshold")
         self.EMERGENCY_BAR = self.config("emergency_threshold")
         self.EMERGENCY_REWARD_RATIO = self.config("emergency_reward_ratio")
@@ -68,19 +68,6 @@ class EnvMobile():
         # self.OBSTACLE = self.config('obstacle')
         self.OBSTACLE = []
 
-        self.uav_energy = copy.deepcopy(
-            np.asarray([self.config("initial_energy") for i in range(self.UAV_NUM)], dtype=np.float64)
-        )
-        # 昊宝硬编码了各个uav的初始位置
-        # self.uav_position = np.asarray(
-        #     [[self.config("init_position")[i][0], self.config("init_position")[i][1]] for i in
-        #      range(self.UAV_NUM)],
-        #     dtype=np.float16)
-        # yyx先将uav初始位置设为地图中心
-        self.uav_position = np.asarray(
-            [[self.MAP_X / 2, self.MAP_Y / 2] for _ in range(self.UAV_NUM)],
-            dtype=np.float16)
-
         self._get_energy_coefficient()
 
         if self.ACTION_MODE == 1:
@@ -91,21 +78,18 @@ class EnvMobile():
             self.gym_action_space = spaces.Discrete(1)
         self.action_space = self.gym_action_space
 
-        self.saved_poi_trajs = np.zeros((self.POI_NUM, 121, 2))  # 用于绘制html
-        self.saved_uav_trajs = [np.zeros((121, 2)) for _ in range(self.UAV_NUM)]  # 用于绘制html
 
+        '''these mat is **read-only** 因此可以放在init中 而不必放在reset中每次episode开始时都读'''
         data_file_dir = f'envs/{self.input_args.dataset}'
-        self.poi_mat = self._init_pois(data_file_dir)  # this mat is **read-only**
+        self.poi_mat = self._init_pois(data_file_dir)
         self.debug_index = self.poi_mat[:,0,:].sum(axis=-1).argmin()  # tmp
         # == OK 对读的这几个列表进行裁剪，时间步240->121，poi数244->33 ==
-        self.poi_position = copy.deepcopy(self.poi_mat[:, 0, :])  # 0意为t=0时poi的初始位置
         self.poi_arrival = np.load(os.path.join(data_file_dir, 'arrival.npy'))[:self.POI_NUM, :self.max_episode_steps + 1]  # shape = (33, 121)，其中33是poi数，121是episode的时间步数
         # 权重在计算reward和metric时用到，先简化问题 不用权重
         self.poi_weight = np.load(os.path.join(data_file_dir, 'poi_weights.npy'))[:self.POI_NUM]
         self.poi_QoS = np.load(os.path.join(data_file_dir, f'poi_QoS{self.input_args.dyna_level}.npy'))
         assert self.poi_QoS.shape == (self.POI_NUM, self.MAX_EPISODE_STEP)
-
-        self.poi_value = [[] for _ in range(self.POI_NUM)]  # 维护当前队列中尚未被收集的包，内容是poi_arrive_time的子集
+        ''''''
 
         self.poi_property_num = 2 + self.UPDATE_USER_NUM + 1 + 1
         info = self.get_env_info()
@@ -146,21 +130,12 @@ class EnvMobile():
                                           for i in range(self.UAV_NUM)]
         self.uav_data_collect = [[]
                                  for i in range(self.UAV_NUM)]
-        self.uav_task_collect = [[]
-                                 for i in range(self.UAV_NUM)]
 
         self.last_action = [[0, 0] for _ in range(self.UAV_NUM)]
-        self.task_allocated = [[] for i in range(self.UAV_NUM)]
         self.dead_uav_list = [False for i in range(self.UAV_NUM)]
 
         self.update_list = [[] for i in range(self.UAV_NUM)]
         self.collect_list = [[] for i in range(self.UAV_NUM)]
-
-        self.single_uav_reward_list = []
-        self.task_uav_reward_list = []
-        self.episodic_reward_list = []
-        self.fairness_list = []
-        self.count_list = []
 
         self.poi_history = []  # episode结束后，长度为121
         self.emergency_ratio_list = [0]
@@ -173,7 +148,17 @@ class EnvMobile():
         self.total_data_arrive = 0
 
         self.step_count = 0
-        self.emergency_status = False
+
+        '''之前把这四个元素的初始化放在init中，导致跨episode时没有被reset'''
+        self.uav_energy = np.asarray(
+            [self.config("initial_energy") for i in range(self.UAV_NUM)],
+            dtype=np.float64)
+        self.uav_position = np.asarray(
+            [[self.MAP_X / 2, self.MAP_Y / 2] for _ in range(self.UAV_NUM)],
+            dtype=np.float16)
+        self.poi_position = copy.deepcopy(self.poi_mat[:, 0, :])  # 0意为t=0时poi的初始位置
+        self.poi_value = [[] for _ in range(self.POI_NUM)]  # 维护当前队列中尚未被收集的包，内容是poi_arrive_time的子集
+        ''''''
 
         self.poi_arrive_time = [[-1] for _ in range(self.POI_NUM)]  # 相比poi_value数组初值多了-1，且记录所有包生成时间，并不通过pop维护
         self.poi_delta_time = [[] for _ in range(self.POI_NUM)]
@@ -209,15 +194,10 @@ class EnvMobile():
     def step(self, action):
         # 若max_episode_step=120, 则执行120次step方法。episode结束时保存120个poi和uav的位置点，而不是icde的121个，把poi、uav的初始位置扔掉！
         self.step_count += 1
-        print('in step, step_count=', self.step_count)
 
         action = action['Discrete']
         uav_reward = np.zeros([self.UAV_NUM])
-        uav_penalty = np.zeros([self.UAV_NUM])
         uav_data_collect = np.zeros([self.UAV_NUM])
-        uav_trajectory = []
-        for i in range(self.UAV_NUM):
-            uav_trajectory.extend(self.uav_trace[i])
 
         '''step1. poi、uav移动和uav收集'''
         self._human_move()  # 根据self.human_df更新self._poi_position
@@ -229,8 +209,7 @@ class EnvMobile():
             Flag = self._judge_obstacle(self.uav_position[uav_index], (new_x, new_y))
             if not Flag:  # 如果出界，就不更新uav的位置
                 self.uav_position[uav_index] = (new_x, new_y)
-
-            self.uav_trace[uav_index].append(self.uav_position[uav_index].tolist())
+            self.uav_trace[uav_index].append(self.uav_position[uav_index].tolist())  # 维护uav_trace
 
             self._use_energy(uav_index, energy_consuming)
             # tau - 移动时间 = 收集时间
@@ -285,6 +264,7 @@ class EnvMobile():
         '''step3. episode结束时的后处理'''
         info = {}
         if done:
+            if self.debug: print('done时, self.step_count=', self.step_count)
             poi_visit_ratio = sum([int(len(p) > 0) for p in self.poi_collect_time]) / self.POI_NUM
             info['f_poi_visit_ratio'] = poi_visit_ratio
 
@@ -311,11 +291,7 @@ class EnvMobile():
             # self._plot_aoi_trend(self.debug_index)
             self.callback_write_trajs_to_storage()
 
-        global_reward = np.mean(uav_reward) + np.mean(uav_penalty)  # 可优化的代码 后一项事实上恒为0 事实上把penalty归入前一项reward中
-
         self.get_obs()
-        self.episodic_reward_list.append(global_reward)
-        # reward_new = [global_reward] + uav_reward.tolist()
         return self.get_obs_from_outside(), uav_reward, done, info
 
     def summary_info(self, info):
@@ -412,7 +388,9 @@ class EnvMobile():
                 d = self._cal_distance(
                     poi_position, self.uav_position[uav_index])
                 self.debug_all_d.append(d)
-                if d < self.poi_QoS[poi_index][self.step_count - 1]:  # 动态SNRth
+                # 固定或动态SNRth
+                SNRth = self.COLLECT_RANGE if self.input_args.use_fixed_range else self.poi_QoS[poi_index][self.step_count - 1]
+                if d < SNRth:
                     if self.input_args.debug and poi_index == self.debug_index:
                         print(f'debug poi has been collected! distance: {d} collect by: uav{uav_index}')
                     # if d < self.COLLECT_RANGE and len(poi_value) > 0:  # SNRth固定，不依赖于poi_index和step_count变化。来自--snr
@@ -462,8 +440,8 @@ class EnvMobile():
                         (debug_packet_num_before_collect - len(self.poi_value[poi_index])) / debug_packet_num_before_collect)
                 if now_time >= (self.step_count + 1) * self.TIME_SLOT:
                     break
-            if (self.debug or self.test) and len(debug_collect_proportion) != 0:
-                print(np.array(debug_collect_proportion).mean())
+            # if (self.debug or self.test) and len(debug_collect_proportion) != 0:
+            #     print(np.array(debug_collect_proportion).mean())
                 # self._plot_histograms(debug_collect_proportion)
         return sum(reward_list), len(reward_list)
 

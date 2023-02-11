@@ -442,7 +442,6 @@ class LogServer(object):
     def __init__(self, args):
         run_args, algo_args = args['run_args'], args['algo_args']
         self.run_args, self.algo_args = run_args, algo_args
-        self.group = '{}-{}-{}'.format(algo_args.algo, algo_args.env_fn.__name__, run_args.group_postfix)  # 算法名+环境名+自定义后缀
         self.name = run_args.name  # 实验名字，包括超参数后缀的yyx经常用的那个
         self.mute = run_args.debug or run_args.mute_wandb  # wandb太慢，debug时不用
         if not self.mute:
@@ -453,7 +452,7 @@ class LogServer(object):
                 config={"run_args": run_args._toDict(recursive=True),
                         "algo_args": algo_args._toDict(recursive=True)},
                 name=run_args.name,
-                group=self.group,
+                group='{}-{}-{}'.format(algo_args.algo, algo_args.env_fn.__name__, run_args.group),  # 算法名+环境名+自定义后缀
                 dir='../wandb',  # dont save at source_code, keep it clean!
             )
             self.wandb_logger = run
@@ -493,7 +492,10 @@ class LogServer(object):
 
             if isinstance(data[log_key], torch.Tensor) and len(data[log_key].shape) > 0 or \
                     isinstance(data[log_key], np.ndarray) and len(data[log_key].shape) > 0:
-                self.writer.add_histogram(log_key, data[log_key], self.step)
+                # TODO 这里报错，可能是wandb打点有异常的原因
+                # TypeError: No loop matching the specified signature and casting was found for ufunc greater
+                # self.writer.add_histogram(log_key, data[log_key], self.step)
+                pass
             else:
                 self.writer.add_scalar(log_key, data[log_key], self.step)
             self.writer.flush()

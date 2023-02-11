@@ -69,17 +69,13 @@ def get_map_props():
     }
     return map_props
 
-def traj_to_timestamped_geojson(index, trajectory, poi_QoS, uav_num, color):  # indextrajindexenum
+def traj_to_timestamped_geojson(index, trajectory, poi_QoS, uav_num, color,
+                                input_args, env_config):
 
     point_gdf = trajectory.df.copy()
-    # point_gdf["previous_geometry"] = point_gdf["geometry"].shift()
-    # point_gdf["time"] = point_gdf.index  # datetimeindex
-    # point_gdf["previous_time"] = point_gdf["time"].shift()
-
     features = []
     # for Point in GeoJSON type
     for i, (current_time, row) in enumerate(point_gdf.iterrows()):  # 遍历一个人的不同时间步
-        # print('i=', i, 'poi_QoS.len=', len(poi_QoS[0]))
         # current_time每隔两个item数值才真的会变化，不影响目前的程序逻辑，不过可以看下数据集还有没有挖掘的潜力
         current_point_coordinates = [row["geometry"].xy[0][0], row["geometry"].xy[1][0]]
         ra = {'uav': 5, 'human': 1}
@@ -88,15 +84,15 @@ def traj_to_timestamped_geojson(index, trajectory, poi_QoS, uav_num, color):  # 
         if index < uav_num:  # UAV
             radius, opacity = ra['uav'], op['uav']
         else:  # human
-            # case1 fixed OK
-            radius, opacity = ra['human'], op['human']
-            # case2 dyna 能跑通，但html中画不出点
-            QoS = poi_QoS[index-uav_num][min(i, len(poi_QoS[0])-1)]  # 防止数组越界
-            # radius, opacity = (200 - QoS)/100 + 1, op['human']
-            radius, opacity = (200 - QoS)/50 + 2, op['human']  # 硬编码以适配dyna_level=3
+            if input_args['use_fixed_range']:  # case1 fixed QoS
+                radius, opacity = ra['human'], op['human']
+            else:  # case2 dyna QoS
+                QoS = poi_QoS[index-uav_num][min(i, len(poi_QoS[1])-1)]  # 防止数组越界
+                # 硬编码以适配dyna_level=3 可根据input_args调整
+                radius, opacity = (200 - QoS)/50 + 2, op['human']
 
         # for Point in GeoJSON type  (Temporally Deprecated)
-        features.append(  #
+        features.append(
             {
                 "type": "Feature",
                 "geometry": {

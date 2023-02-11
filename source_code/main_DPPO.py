@@ -31,7 +31,7 @@ def getRunArgs(input_args):
     run_args.debug = input_args.debug
     run_args.test = input_args.test
     run_args.init_checkpoint = input_args.init_checkpoint
-    run_args.group_postfix = input_args.group_postfix
+    run_args.group = input_args.group
     run_args.mute_wandb = input_args.mute_wandb
     '''yyx add end'''
 
@@ -78,12 +78,12 @@ def override(alg_args, run_args, env_fn_train, input_args):
         alg_args.model_batch_size = 4
         alg_args.max_ep_len = 5
         alg_args.rollout_length = 20
-        alg_args.test_length = 1
+        alg_args.test_length = 600  # 测试episode的最大步长
         alg_args.model_buffer_size = 10
         alg_args.n_model_update = 3
         alg_args.n_model_update_warmup = 3
         alg_args.n_warmup = 1
-        # 注意: n_iter*rollout_length得比一个episode长，不然一次done都不触发，train_trajs不会保存到外存
+        # 注意: n_iter*rollout_length得比一个episode长，不然一次train episode done都不触发，train_trajs不会保存到外存
         alg_args.n_iter = 7
         alg_args.n_test = 1
         alg_args.n_traj = 4
@@ -117,6 +117,8 @@ def override(alg_args, run_args, env_fn_train, input_args):
         run_args.name += f'_UpdateNum={input_args.update_num}'
     if input_args.future_obs != 0:
         run_args.name += f'_FutureObs={input_args.future_obs}'
+    if input_args.use_fixed_range:
+        run_args.name += f'_FixedRange'
 
     # tune algo
     if input_args.lr is not None:
@@ -150,7 +152,7 @@ def parse_args():
     parser.add_argument("--output_dir", type=str, default='runs/debug', help="which fold to save under 'runs/'")
 
     parser.add_argument('--mute_wandb', default=False, action='store_true')
-    parser.add_argument('--group_postfix', type=str, default='debug', help='填写我对一组实验的备注，作用与wandb的group和tb的实验保存路径')
+    parser.add_argument('--group', type=str, default='debug', help='填写我对一组实验的备注，作用与wandb的group和tb的实验保存路径')
     parser.add_argument('--init_checkpoint', type=str)  # load pretrained model
 
     # tune algo
@@ -158,13 +160,15 @@ def parse_args():
     parser.add_argument('--lr_v', type=float)
     parser.add_argument('--debug_use_stack_frame', action='store_true')
     # tune env
+    parser.add_argument('--use_fixed_range', action='store_true')
     parser.add_argument('--snr', type=float, default=200)
     parser.add_argument('--init_energy', type=float, default=719280)
     parser.add_argument('--dyna_level', type=str, default='2', help='指明读取不同难度的poi_QoS.npy')
     parser.add_argument('--user_data_amount', type=int, default=1)
     parser.add_argument('--update_num', type=int, default=10)
     parser.add_argument('--future_obs', type=int, default=0)
-    
+
+
 
     args = parser.parse_args()
 
@@ -175,14 +179,14 @@ def parse_args():
         args.setting_dir = 'NCSU33move'
 
     if args.debug:
-        args.group_postfix = 'debug'
+        args.group = 'debug'
         args.output_dir = 'runs/debug'
         args.Max_train_steps = 100
         args.T_horizon = 10
         args.eval_interval = 50
         args.save_interval = 20
         args.n_rollout_threads = 3
-    args.output_dir = f'runs/{args.group_postfix}'
+    args.output_dir = f'runs/{args.group}'
 
     return args
 

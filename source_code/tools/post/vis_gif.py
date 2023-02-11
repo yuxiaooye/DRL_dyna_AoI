@@ -34,25 +34,27 @@ def get_arg_postfix(args):
 
 
 def main(args):
+    '''从args.output_dir中拿到轨迹'''
     traj_file = osp.join(args.output_dir, f'{args.tag}_saved_trajs/{args.traj_filename}')
     trajs = np.load(traj_file)
     poi_trajs, uav_trajs = list(trajs['arr_0']), list(trajs['arr_1'])  # 当人也在动时，这里也需要读poi_trajs
 
+    '''从params.json中拿到训练时参数'''
     json_file = osp.join(args.output_dir, 'params.json')
     with open(json_file, 'r') as f:
         params = json.load(f)
-        args.dataset = params['input_args']['dataset']
+        input_args = params['input_args']
         env_config = params['env_config']
-        data_file_dir = f'envs/{args.dataset}'
-        poi_QoS = np.load(os.path.join(data_file_dir, f"poi_QoS{params['input_args']['dyna_level']}.npy"))
     uav_num = env_config['uav_num']
     poi_num = env_config['poi_num']
     num_timestep = env_config['max_episode_step']
+    dataset = input_args['dataset']
+    poi_QoS = np.load(os.path.join(f'envs/{dataset}', f"poi_QoS{input_args['dyna_level']}.npy"))
+    assert poi_QoS.shape == (poi_num, num_timestep)
+    rm = Roadmap(dataset)
 
-    rm = Roadmap(args.dataset)
     map = folium.Map(location=[(rm.lower_left[1] + rm.upper_right[1]) / 2, (rm.lower_left[0] + rm.upper_right[0]) / 2],
                      tiles="cartodbpositron", zoom_start=14, max_zoom=24)
-
     folium.TileLayer('Stamen Terrain').add_to(map)
     folium.TileLayer('Stamen Toner').add_to(map)
     folium.TileLayer('cartodbpositron').add_to(map)
@@ -122,7 +124,9 @@ def main(args):
 
     for index, traj in enumerate(trajs.trajectories):
         name, color = get_name_color_by_index(index)
-        features = traj_to_timestamped_geojson(index, traj, poi_QoS, uav_num, color)
+        # TODO 这里是否读poi_QoS，要看input_args中的--use_fixed_range开关
+        features = traj_to_timestamped_geojson(index, traj, poi_QoS, uav_num, color,
+                                               input_args, env_config)
         try:
             TimestampedGeoJson(
                 {
@@ -157,12 +161,9 @@ def main(args):
         map.get_root().save(vsave_dir + f'/{args.traj_filename[:-4]}{arg_postfix}.html')
     else:
         if not osp.exists(args.group_save_dir): os.makedirs(args.group_save_dir)
-        # postfix = get_save_postfix_by_copo_tune(params['input_args'])  # note: only use this line when group=hypertune, otherwise use next line
-        postfix = args.output_dir.split('/')[-1]
         save_file = os.path.join(args.group_save_dir, f'{arg_postfix}.html')
         print('------args.group_save_dir = ', args.group_save_dir)
         print("------f'{arg_postfix}.html' = ", f'{arg_postfix}.html')
-        # print("------f'{postfix}{arg_postfix}.html' = ", f'{postfix}{arg_postfix}.html')
         print('------save_file = ', save_file)
         map.get_root().save(save_file)
 

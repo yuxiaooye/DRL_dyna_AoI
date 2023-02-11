@@ -27,7 +27,8 @@ from algorithms.algo.buffer import MultiCollect, Trajectory, TrajectoryBuffer, M
 
 class OnPolicyRunner:
     def __init__(self, logger, run_args, alg_args, agent, env_learn, env_test, env_args, **kwargs):
-        self.run_args = run_args  # yyx add
+        self.run_args = run_args
+        self.debug = self.run_args.debug
         self.logger = logger
         self.name = run_args.name
         # agent initialization
@@ -155,7 +156,7 @@ class OnPolicyRunner:
             done, ep_ret, ep_len = np.array([False]), 0, 0  # done就是把标量包装成array
             env = self.env_test
             env.reset()
-            while not (done.any() or (ep_len == length)):
+            while not (done.any() or (ep_len == length)):  # 测试时限定一个episode最大为length步
                 s = env.get_obs_from_outside()
                 a = self.agent.act(s).sample()
                 if len(a.shape) == 2 and a.shape[0] == 1:  # for IA2C and IC3Net
@@ -236,6 +237,11 @@ class OnPolicyRunner:
                     self.best_episode_reward = ep_r
                     self.agent.save_nets(dir_name=self.run_args.output_dir, is_newbest=True)
                     self.env_learn.callback_write_trajs_to_storage(is_newbest=True)
+                if self.debug:  # TODO 检查为啥2.10晚上wandb的collect ratio和reward都异常
+                    print("我就是wandb！我在这里打点数据收集率:", env_info['a_poi_collect_ratio'])
+                with open('./tmp.txt', 'a') as f:
+                    f.write(f"{env_info['a_poi_collect_ratio']}\n")
+
                 self.logger.log(collect_ratio=env_info['a_poi_collect_ratio'],
                                 violation_ratio=env_info['b_emergency_violation_ratio'],
                                 episodic_aoi=env_info['e_weighted_aoi'],

@@ -192,7 +192,10 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
                 self.optimizer_pi.zero_grad()
                 loss_pi.backward()
                 self.optimizer_pi.step()
-                self.logger.log(surr_loss=loss_surr, entropy=loss_entropy, kl_divergence=kl, pi_update=None)
+                try:
+                    self.logger.log(surr_loss=loss_surr, entropy=loss_entropy, kl_divergence=kl, pi_update=None)
+                except:
+                    pass
                 kl_all.append(kl.abs().item())
                 if self.target_kl is not None and kl.abs() > 1.5 * self.target_kl:
                     break
