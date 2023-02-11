@@ -71,7 +71,6 @@ class Config(object):
             "rate_threshold": 0.05,
             "emergency_threshold": 100,
             "emergency_reward_ratio": [0.5,0],
-            "emergency_penalty": "const",
 
         }
 

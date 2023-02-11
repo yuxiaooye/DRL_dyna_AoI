@@ -117,7 +117,7 @@ class OnPolicyRunner:
                 if iter % 10 == 0:
                     self.updateModel()
             t2 = time.time()
-            print('t=', t2 - t1)
+            # print('t=', t2 - t1)
 
             agentInfo = []
             real_trajs = trajs
@@ -148,7 +148,6 @@ class OnPolicyRunner:
         time_t = time.time()
         length = self.test_length
         returns = []
-        scaled = []
         lengths = []
         episodes = []
         for i in trange(self.n_test, desc='test'):
@@ -171,9 +170,6 @@ class OnPolicyRunner:
             if ep_ret > self.best_test_episode_reward:
                 self.best_test_episode_reward = ep_ret
                 self.env_test.callback_write_trajs_to_storage(is_newbest=True)
-            if hasattr(env, 'rescaleReward'):
-                scaled += [ep_ret]
-                ep_ret = env.rescaleReward(ep_ret, ep_len)
             returns += [ep_ret]
             lengths += [ep_len]
             episodes += [episode]
@@ -181,10 +177,9 @@ class OnPolicyRunner:
         lengths = np.stack(lengths, axis=0)
         self.logger.log(test_episode_reward=returns.mean(),
                         test_episode_len=lengths.mean(), test_round=None)
-        print(returns)
+        # print(returns)
         print(f"{self.n_test} episodes average accumulated reward: {returns.mean()}")
-        if hasattr(env, 'rescaleReward'):
-            print(f"scaled reward {np.mean(scaled)}")
+
         # with open(f"checkpoints/{self.name}/test.pickle", "wb") as f:
         #     pickle.dump(episodes, f)
         # with open(f"checkpoints/{self.name}/test.txt", "w") as f:
@@ -223,7 +218,8 @@ class OnPolicyRunner:
             #     episode_r = env._comparable_reward()
             if episode_r.ndim > 1:
                 episode_r = episode_r.mean(axis=0)
-            self.episode_reward += episode_r  # episode_r也是个列表 最后再求和
+            self.episode_reward += episode_r  # episode_r也是个列表 每个uav的奖励先相加
+            if self.debug: print('在main中的一个step, r=', episode_r)
             self.episode_len += 1
             self.logger.log(interaction=None)
             if self.episode_len == self.max_episode_len:
@@ -232,16 +228,12 @@ class OnPolicyRunner:
             # 当episode结束或达到规定的最大步长，reset
             if done.any() or (self.episode_len == self.max_episode_len):
                 ep_r = self.episode_reward.sum()
+                print('train episode reward:', ep_r)
                 self.logger.log(episode_reward=ep_r, episode_len=self.episode_len, episode=None)
                 if ep_r > self.best_episode_reward:
                     self.best_episode_reward = ep_r
                     self.agent.save_nets(dir_name=self.run_args.output_dir, is_newbest=True)
                     self.env_learn.callback_write_trajs_to_storage(is_newbest=True)
-                if self.debug:  # TODO 检查为啥2.10晚上wandb的collect ratio和reward都异常
-                    print("我就是wandb！我在这里打点数据收集率:", env_info['a_poi_collect_ratio'])
-                with open('./tmp.txt', 'a') as f:
-                    f.write(f"{env_info['a_poi_collect_ratio']}\n")
-
                 self.logger.log(collect_ratio=env_info['a_poi_collect_ratio'],
                                 violation_ratio=env_info['b_emergency_violation_ratio'],
                                 episodic_aoi=env_info['e_weighted_aoi'],
@@ -250,20 +242,21 @@ class OnPolicyRunner:
                                 )
                 '''执行env的reset'''
                 try:
-                    _, self.episode_reward, self.episode_len = self.env_learn.reset(), 0, 0  # OK
-                except Exception as e:
-                    print('reset error!:', e)
                     _, self.episode_reward, self.episode_len = self.env_learn.reset(), 0, 0
-                    if self.model_based == False:
-                        trajs += traj.retrieve()
-                        traj = TrajectoryBuffer(device=self.device)
+                except Exception as e:
+                    raise NotImplementedError
+                    # print('reset error!:', e)
+                    # _, self.episode_reward, self.episode_len = self.env_learn.reset(), 0, 0
+                    # if self.model_based == False:
+                    #     trajs += traj.retrieve()
+                    #     traj = TrajectoryBuffer(device=self.device)
 
             if self.model_based and self.episode_len == self.max_episode_len:
                 trajs += traj.retrieve()
                 traj = TrajectoryBuffer(device=self.device)
         # --------------------------------------------------------------------------------------
         end = time.time()
-        print('time in 1 episode is ', end - start)
+        # print('time in 1 episode is ', end - start)
         trajs += traj.retrieve(length=self.max_episode_len)
         self.logger.log(env_rollout_time=time.time() - time_t)
         return trajs

@@ -55,7 +55,6 @@ class EnvMobile():
         self.RATE_THRESHOLD = self.config("rate_threshold")
         self.EMERGENCY_BAR = self.config("emergency_threshold")
         self.EMERGENCY_REWARD_RATIO = self.config("emergency_reward_ratio")
-        self.EMERGENCY_PENALTY = self.config("emergency_penalty")
         self.UPDATE_USER_NUM = self.config("update_user_num")
         self.USER_DATA_AMOUNT = self.config("user_data_amount")
 
@@ -123,6 +122,7 @@ class EnvMobile():
 
     def reset(self):
         self.debug_all_d = []
+        self.debug_all_r = []
 
         self.uav_trace = [[] for i in range(self.UAV_NUM)]  # 相当于我icde用的saved_uav_trajs
         self.uav_state = [[] for i in range(self.UAV_NUM)]
@@ -245,7 +245,7 @@ class EnvMobile():
             if aoi > self.EMERGENCY_BAR * self.TIME_SLOT:  # 超过了AoI阈值
                 self.poi_emergency[i].append(1)
                 em_now += 1
-                em_penalty += self.get_emergency_penalty((aoi - self.EMERGENCY_BAR * self.TIME_SLOT) // self.TIME_SLOT)
+                em_penalty += 1  # penalty是常数1
             now_aoi += aoi
             aoi_list.append(aoi)
 
@@ -287,7 +287,7 @@ class EnvMobile():
                 warnings.simplefilter("ignore", category=RuntimeWarning)
                 info = self.summary_info(info)
 
-            # self._plot_histograms()
+            # self._plot_histograms(self.debug_all_r)
             # self._plot_aoi_trend(self.debug_index)
             self.callback_write_trajs_to_storage()
 
@@ -333,7 +333,6 @@ class EnvMobile():
             print(f"collect_data_ratio: {info['a_poi_collect_ratio']} "
                   f"episodic_aoi: {info['e_weighted_aoi']} "
                   )
-
 
         return info
 
@@ -391,8 +390,8 @@ class EnvMobile():
                 # 固定或动态SNRth
                 SNRth = self.COLLECT_RANGE if self.input_args.use_fixed_range else self.poi_QoS[poi_index][self.step_count - 1]
                 if d < SNRth:
-                    if self.input_args.debug and poi_index == self.debug_index:
-                        print(f'debug poi has been collected! distance: {d} collect by: uav{uav_index}')
+                    # if self.input_args.debug and poi_index == self.debug_index:
+                    #     print(f'debug poi has been collected! distance: {d} collect by: uav{uav_index}')
                     # if d < self.COLLECT_RANGE and len(poi_value) > 0:  # SNRth固定，不依赖于poi_index和step_count变化。来自--snr
                     position_list.append((poi_index, d))
 
@@ -431,6 +430,7 @@ class EnvMobile():
                     self.poi_aoi[poi_index].append(yn * tn + 0.5 * yn * yn)
                     self.poi_wait_time[poi_index].append(now_time - self.poi_arrive_time[poi_index][index + 1])
                     reward = yn
+                    # if self.debug: print('在env中，收集一个包时的reward=', reward)
                     reward_list.append(reward * weight)
                     now_time += delta_t
                     assert now_time <= (self.step_count + 1) * self.TIME_SLOT + 1
@@ -680,14 +680,6 @@ class EnvMobile():
                 self.poi_delta_time[p_index].append(time - self.poi_arrive_time[p_index][-1])  # 本次到达与上次到达之间的间隔，也即图(2)b纵轴相邻两次到达的间隔
                 self.poi_arrive_time[p_index].append(time)
 
-    def get_emergency_penalty(self, emergency_times):
-        emergency_mode = self.EMERGENCY_PENALTY
-        if emergency_mode == 'const':
-            return 1
-        elif emergency_mode == 'e_t':
-            return (1.02 ** emergency_times) * (1.02 - 1) + emergency_times + 0.5
-        else:
-            raise NotImplementedError
 
     def _plot_aoi_trend(self, poi_index):
         assert len(self.poi_history) == 121

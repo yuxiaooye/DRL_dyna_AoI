@@ -169,7 +169,6 @@ def parse_args():
     parser.add_argument('--future_obs', type=int, default=0)
 
 
-
     args = parser.parse_args()
 
     # == yyx add ==
