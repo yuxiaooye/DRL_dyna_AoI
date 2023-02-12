@@ -120,7 +120,7 @@ class ShareVecEnv(ABC):
 
     def step(self, actions):
         """
-        Step the environments synchronously.  
+        Step the environments synchronously.  嘿嘿，注意环境之间是同步的
         This is available for backwards compatibility.
         """
         self.step_async(actions)
@@ -145,6 +145,7 @@ class ShareVecEnv(ABC):
 
     @property
     def unwrapped(self):
+        # 这个可能是得到某个具体环境的属性的关键
         if isinstance(self, VecEnvWrapper):
             return self.venv.unwrapped
         else:
@@ -158,24 +159,25 @@ class ShareVecEnv(ABC):
 
 
 def worker(remote, parent_remote, env_fn_wrapper):
+    '''jsac会用到 这个属于远端'''
     parent_remote.close()
     # env = env_fn_wrapper.x()
-    env = env_fn_wrapper.x  # .x
+    env = env_fn_wrapper.x  # .x已经是环境类对象了
     while True:
         cmd, data = remote.recv()
         if cmd == 'step':
-            ob, mask, reward, done, info = env.step(data)
-            # ！donemainenv.reset
+            ob, reward, done, info = env.step(data)
+            # 这个感觉没必要！done时，我会在main中手动调用env.reset的
             # if 'bool' in done.__class__.__name__:
             #     if done:
             #         ob = env.reset()
             # else:
             #     if np.all(done):
             #         ob = env.reset()
-            remote.send((ob, mask, reward, done, info))
+            remote.send((ob, reward, done, info))
         elif cmd == 'reset':
-            ob, mask = env.reset()
-            remote.send((ob, mask))
+            env.reset()
+            remote.send('')
         elif cmd == 'render':
             if data == "rgb_array":
                 fr = env.render(mode=data)
@@ -190,9 +192,12 @@ def worker(remote, parent_remote, env_fn_wrapper):
             remote.close()
             break
         elif cmd == 'get_spaces':
-            remote.send((env.observation_space, env.share_observation_space, env.action_space))
+            shared_obs_space = 0
+            remote.send((env.observation_space, shared_obs_space, env.action_space))
         elif cmd == 'get_saved_trajs':
-            remote.send((env.saved_uav_trajs, env.saved_car_trajs, env.saved_poi_trajs))
+            remote.send((env.uav_trace))
+        elif cmd == 'get_obs_from_outside':
+            remote.send(env.get_obs_from_outside())
         else:
             raise NotImplementedError
 
@@ -209,7 +214,7 @@ class GuardSubprocVecEnv(ShareVecEnv):
         self.ps = [Process(target=worker, args=(work_remote, remote, CloudpickleWrapper(env_fn)))
                    for (work_remote, remote, env_fn) in zip(self.work_remotes, self.remotes, env_fns)]
         for p in self.ps:
-            p.daemon = False  # could cause zombie process（SubprocVecEnv）
+            p.daemon = False  # could cause zombie process（和SubprocVecEnv唯一的区别）
             p.start()
         for remote in self.work_remotes:
             remote.close()
@@ -255,6 +260,7 @@ class GuardSubprocVecEnv(ShareVecEnv):
 
 
 class SubprocVecEnv(ShareVecEnv):
+    '''TODO jsac会用到'''
     def __init__(self, env_fns, spaces=None):
         """
         envs: list of gym environments to run in subprocesses
@@ -271,31 +277,30 @@ class SubprocVecEnv(ShareVecEnv):
         for remote in self.work_remotes:
             remote.close()
 
-        # send
-        # saved_uav_trajs
+        # 哦吼，这里通过send一个指定的字符串获取信息，
+        # 那么为了获得saved_uav_trajs，我也可以定义一个规则
         self.remotes[0].send(('get_spaces', None))
         observation_space, share_observation_space, action_space = self.remotes[0].recv()
-        # __init__()
+        # 这里调用基类的__init__()
         ShareVecEnv.__init__(self, len(env_fns), observation_space,
                              share_observation_space, action_space)
 
     def step_async(self, actions):
         for remote, action in zip(self.remotes, actions):
-            remote.send(('step', action))  # action
+            remote.send(('step', action))  # action作为参数发给各个环境线程
         self.waiting = True
 
     def step_wait(self):
         results = [remote.recv() for remote in self.remotes]
         self.waiting = False
-        obs, masks, rewards, dones, infos = zip(*results)
-        return np.stack(obs), np.stack(masks), np.stack(rewards), np.stack(dones), infos
+        obs, rewards, dones, infos = zip(*results)
+        return np.stack(obs), np.stack(rewards), np.stack(dones), infos
 
-    def reset(self):  # yyx在ICDE修改了这个方法，因为需要return mask
+    def reset(self):
         for remote in self.remotes:
             remote.send(('reset', None))
         results = [remote.recv() for remote in self.remotes]
-        obs, masks = zip(*results)
-        return np.stack(obs), np.stack(masks)
+        return
 
     def reset_task(self):
         for remote in self.remotes:
@@ -306,8 +311,14 @@ class SubprocVecEnv(ShareVecEnv):
         for remote in self.remotes:
             remote.send(('get_saved_trajs', None))
         results = [remote.recv() for remote in self.remotes]
-        saved_uav_trajs, saved_car_trajs, saved_poi_trajs = zip(*results)
-        return np.stack(saved_uav_trajs), np.stack(saved_car_trajs), np.stack(saved_poi_trajs)
+        return np.stack(results)
+
+    def get_obs_from_outside(self):
+        for remote in self.remotes:
+            remote.send(('get_obs_from_outside', None))
+        results = [remote.recv() for remote in self.remotes]
+        ans = torch.stack(results)
+        return ans
 
     def close(self):
         if self.closed:

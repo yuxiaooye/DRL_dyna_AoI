@@ -26,9 +26,6 @@ class Config(object):
 
     def dataset_config(self):
         dataset = self.input_args.dataset
-        # rm = Roadmap(dataset)
-        # self.dict['max_x'] = round(rm.max_dis_x)
-        # self.dict['max_y'] = round(rm.max_dis_y)
         if dataset == 'purdue':
             self.dict['poi_num'] = 59
         elif dataset == 'NCSU':

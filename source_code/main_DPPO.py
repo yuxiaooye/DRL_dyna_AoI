@@ -20,11 +20,8 @@ import argparse
 
 def getRunArgs(input_args):
     run_args = Config()
-    run_args.n_thread = 1
-    run_args.parallel = False
     run_args.device = input_args.device
-    run_args.n_cpu = 1 / 4
-    run_args.n_gpu = 0
+
 
     '''yyx add start'''
     run_args.profiling = False
@@ -49,17 +46,12 @@ def getRunArgs(input_args):
     return run_args
 
 
-def initArgs(run_args, env_train, env_test, input_arg):
-    ref_env = env_train
-    if input_arg.env in ['mobile'] or input_arg.algo in ['CPPO', 'DMPO', 'IC3Net', 'IA2C']:
-        env_str = input_arg.env[0].upper() + input_arg.env[1:]
-        config = importlib.import_module(f"algorithms.config.{env_str}_{input_args.algo}")
-
+def getAlgArgs(run_args, input_args, env):
+    assert input_args.env in ['mobile'] and input_args.algo in ['DPPO', 'CPPO', 'DMPO', 'IC3Net', 'IA2C']
+    env_str = input_args.env[0].upper() + input_args.env[1:]
+    config = importlib.import_module(f"algorithms.config.{env_str}_{input_args.algo}")
     # 在这里，得到了alg_args.agent_args.action_space
-    alg_args = config.getArgs(run_args.radius_p, run_args.radius_v, run_args.radius_pi, ref_env)
-
-    # yyx add
-    alg_args.debug_use_stack_frame = input_arg.debug_use_stack_frame
+    alg_args = config.getArgs(run_args.radius_p, run_args.radius_v, run_args.radius_pi, env)
     return alg_args
 
 
@@ -68,16 +60,11 @@ def initAgent(logger, device, agent_args, input_args):
 
 
 
-
-
-
-def override(alg_args, run_args, env_fn_train, input_args):
-    alg_args.env_fn = env_fn_train
-
+def override(alg_args, run_args, input_args):
     if run_args.debug:
         alg_args.model_batch_size = 4
         alg_args.max_ep_len = 5
-        alg_args.rollout_length = 20
+        alg_args.rollout_length = 20 * input_args.n_thread
         alg_args.test_length = 600  # 测试episode的最大步长
         alg_args.model_buffer_size = 10
         alg_args.n_model_update = 3
@@ -129,11 +116,14 @@ def override(alg_args, run_args, env_fn_train, input_args):
         alg_args.agent_args.lr_v = input_args.lr_v
     if input_args.debug_use_stack_frame:
         run_args.name += f'_UseStackFrame'
-    run_args.output_dir = '../{}/{}'.format(input_args.output_dir, run_args.name)
-
+    final = '../{}/{}'.format(input_args.output_dir, run_args.name)
+    run_args.output_dir = final
+    input_args.output_dir = final
+    
     alg_args.algo = input_args.algo
-    '''yyx add end'''
-    return alg_args, run_args
+    alg_args.debug_use_stack_frame = input_args.debug_use_stack_frame
+
+    return alg_args, run_args, input_args
 
 
 def parse_args():
@@ -153,6 +143,7 @@ def parse_args():
     parser.add_argument('--mute_wandb', default=False, action='store_true')
     # tune agent
     parser.add_argument('--init_checkpoint', type=str)  # load pretrained model
+    parser.add_argument('--n_thread', type=int, default=1)
     # tune algo
     parser.add_argument('--lr', type=float)
     parser.add_argument('--lr_v', type=float)
@@ -165,37 +156,26 @@ def parse_args():
     parser.add_argument('--user_data_amount', type=int, default=1)
     parser.add_argument('--update_num', type=int, default=10)
     parser.add_argument('--future_obs', type=int, default=0)
-
-
     args = parser.parse_args()
 
-    # == yyx add ==
-    if args.dataset == 'purdue':
-        args.setting_dir = 'purdue59move'
-    elif args.dataset == 'NCSU':
-        args.setting_dir = 'NCSU33move'
 
     if args.debug:
         args.group = 'debug'
         args.output_dir = 'runs/debug'
-        args.Max_train_steps = 100
-        args.T_horizon = 10
-        args.eval_interval = 50
-        args.save_interval = 20
-        args.n_rollout_threads = 3
+        args.n_thread = 2
+
     args.output_dir = f'runs/{args.group}'
 
     return args
 
 input_args = parse_args()
 
-def hook_input_args(input_args, env_args, output_dir):
+def record_input_args(input_args, env_args, output_dir):
     params = dict()
     from envs.config_3d import Config
     env_config = Config(env_args, input_args)
-
-    params['env_config'] = env_config.dict
     params['input_args'] = vars(input_args)
+    params['env_config'] = env_config.dict
 
     if not os.path.exists(output_dir): os.makedirs(output_dir)
     with open(os.path.join(output_dir, 'params.json'), 'w') as f:
@@ -217,32 +197,33 @@ from envs.env_mobile import EnvMobile
 env_fn_train, env_fn_test = EnvMobile, EnvMobile
 
 
-bar = 100
-
-
 env_args = {  # 这里环境类的参数抄昊宝
     "action_mode": 3,
     "render_mode": True,
-    "emergency_threshold": bar,
+    "emergency_threshold": 100,
     "collect_range": input_args.snr,
     "initial_energy": input_args.init_energy,
     "user_data_amount": input_args.user_data_amount,
     "update_num": input_args.update_num,
 }
 
-env_train = env_fn_train(env_args, input_args)
-env_test = env_fn_test(env_args, input_args)
-
 run_args = getRunArgs(input_args)
 print('debug =', run_args.debug)
-alg_args = initArgs(run_args, env_train, env_test, input_args)
-alg_args, run_args = override(alg_args, run_args, env_fn_train, input_args)
-hook_input_args(input_args, env_args, run_args.output_dir)
 
-env_train.input_args.output_dir = run_args.output_dir  # 统一输出路径
-env_test.input_args.output_dir = run_args.output_dir
-env_train.phase = 'train'
-env_test.phase = 'test'
+dummy_env = env_fn_train(env_args, input_args, phase='dummy')
+alg_args = getAlgArgs(run_args, input_args, dummy_env)
+alg_args, run_args, input_args = override(alg_args, run_args, input_args)
+record_input_args(input_args, env_args, run_args.output_dir)
+
+from env_configs.wrappers.env_wrappers import SubprocVecEnv
+envs_train = SubprocVecEnv([env_fn_train(env_args, input_args, phase='train') for _ in range(input_args.n_thread)])
+envs_test = SubprocVecEnv([env_fn_test(env_args, input_args, phase='test') for _ in range(1)])
+
+
+
+
+
+
 
 os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3,4,5,6,7'
 
@@ -250,6 +231,6 @@ logger = LogServer({'run_args': run_args, 'algo_args': alg_args})
 logger = LogClient(logger)
 # logger同时被传入agent类和runner类
 agent = initAgent(logger, run_args.device, alg_args.agent_args, input_args)
-OnPolicyRunner(logger=logger, run_args=run_args, alg_args=alg_args, agent=agent,
-               env_learn=env_train, env_test=env_test, env_args=input_args).run()
+OnPolicyRunner(logger=logger, agent=agent, envs_learn=envs_train, envs_test=envs_test, dummy_env=dummy_env,
+               run_args=run_args, alg_args=alg_args, input_args=input_args).run()
 print('OK!')

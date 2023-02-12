@@ -1,17 +1,23 @@
 from shapely.geometry import Point
 import folium
+import os
+import os.path as osp
+import pandas as pd
+import numpy as np
 
+
+project_dir = osp.dirname(osp.dirname(osp.dirname(__file__)))
 
 class Roadmap():
 
-    def __init__(self, dataset_str):
-        # xypygamexy
+    def __init__(self, dataset, env_config):
+        self.dataset = dataset
+        self.env_config = env_config
 
-        self.dataset_str = dataset_str
         self.map_props = get_map_props()
+        self.lower_left = get_map_props()[dataset]['lower_left']
+        self.upper_right = get_map_props()[dataset]['upper_right']
 
-        self.lower_left = get_map_props()[dataset_str]['lower_left']
-        self.upper_right = get_map_props()[dataset_str]['upper_right']
 
         try:  # movingpandas
             from movingpandas.geometry_utils import measure_distance_geodesic
@@ -19,18 +25,30 @@ class Roadmap():
                                                   Point(self.upper_right[0], self.lower_left[1]))
             self.max_dis_x = measure_distance_geodesic(Point(self.lower_left[0], self.lower_left[1]),
                                                   Point(self.lower_left[0], self.upper_right[1]))
-            # print(f'max_x = {self.max_dis_x}, max_y = {self.max_dis_y}')
         except:
             # hardcode
-            if dataset_str == 'NCSU':
+            if dataset == 'NCSU':
                 self.max_dis_y = 3255.4913305859623
                 self.max_dis_x = 2718.3945272795013
-            elif dataset_str == 'purdue':
+            elif dataset == 'purdue':
                 self.max_dis_y = 1671.8995666382975
                 self.max_dis_x = 1221.4710883988212
-            elif dataset_str == 'KAIST':
-                self.max_dis_y = 2100.207579392558
-                self.max_dis_x = 2174.930950809533
+            else: raise NotImplementedError
+
+    def init_pois(self):
+        '''读df并处理表头'''
+        poi_df = pd.read_csv(osp.join(project_dir, f'envs/{self.dataset}/human.csv'))
+        try:  # 如果df中有'pz'列, 删除它
+            poi_df.drop('pz', axis=1, inplace=True)
+        except:
+            pass
+        assert poi_df.columns.to_list()[-2:] == ['px', 'py']
+        '''将df转换为np.array'''
+        poi_mat = np.expand_dims(poi_df[poi_df['id'] == 0].values[:, -2:], axis=0)  # idt
+        for id in range(1, self.env_config['poi_num']):
+            subDf = poi_df[poi_df['id'] == id]
+            poi_mat = np.concatenate((poi_mat, np.expand_dims(subDf.values[:, -2:], axis=0)), axis=0)
+        return poi_mat  # shape = (33, 121, 2) 意为33个poi在121个时间步的坐标信息
 
     def lonlat2pygamexy(self, lon, lat):
         '''

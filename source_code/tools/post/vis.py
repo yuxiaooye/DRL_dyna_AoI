@@ -19,10 +19,6 @@ from env_configs.roadmap_env.roadmap_utils import *
 
 
 def render_HTML(output_dir, tag='train', traj_filename='eps_best.npz'):
-    '''从output_dir中拿到轨迹'''
-    traj_file = osp.join(output_dir, f'{tag}_saved_trajs/{traj_filename}')
-    trajs = np.load(traj_file)
-    poi_trajs, uav_trajs = list(trajs['arr_0']), list(trajs['arr_1'])  # 当人也在动时，这里也需要读poi_trajs
 
     '''从params.json中拿到训练时参数'''
     json_file = osp.join(output_dir, 'params.json')
@@ -36,7 +32,14 @@ def render_HTML(output_dir, tag='train', traj_filename='eps_best.npz'):
     dataset = input_args['dataset']
     poi_QoS = np.load(os.path.join(f'envs/{dataset}', f"poi_QoS{input_args['dyna_level']}.npy"))
     assert poi_QoS.shape == (poi_num, num_timestep)
-    rm = Roadmap(dataset)
+    rm = Roadmap(dataset, env_config)
+
+    '''从output_dir中拿到轨迹'''
+    traj_file = osp.join(output_dir, f'{tag}_saved_trajs/{traj_filename}')
+    trajs = np.load(traj_file)
+    # poi_trajs, uav_trajs = list(trajs['arr_0']), list(trajs['arr_1'])
+    poi_trajs = rm.init_pois()  # TODO 直接根据params.json读NCSU文件夹下的，没必要读输出文件夹下的
+    uav_trajs = list(trajs['arr_0'])  # OK
 
     map = folium.Map(location=[(rm.lower_left[1] + rm.upper_right[1]) / 2, (rm.lower_left[0] + rm.upper_right[0]) / 2],
                      tiles="cartodbpositron", zoom_start=14, max_zoom=24)
@@ -133,7 +136,7 @@ def render_HTML(output_dir, tag='train', traj_filename='eps_best.npz'):
     folium.LayerControl().add_to(map)
 
     # save
-    save_file = os.path.join(output_dir, f'vis.html')
+    save_file = os.path.join(output_dir, f'vis_{tag}.html')
     # print('------save_file = ', save_file)
     map.get_root().save(save_file)
 

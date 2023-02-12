@@ -14,22 +14,18 @@ import os.path as osp
 from env_configs.roadmap_env.roadmap_utils import Roadmap
 
 
-project_dir = osp.dirname(osp.dirname(__file__))
-
-
-
 # 看看有没有必要把MIMO用进来?
 class EnvMobile():
     ids = ['EnvMobile-v0']
 
-    def __init__(self, env_args, input_args):
+    def __init__(self, env_args, input_args, **kwargs):
         self.config = Config(env_args, input_args)
         self.input_args = input_args
-
         self.debug = self.input_args.debug
         self.test = self.input_args.test
+        self.phase = kwargs['phase']
         # roadmap
-        self.rm = Roadmap(self.input_args.dataset)
+        self.rm = Roadmap(self.input_args.dataset, self.config.dict)
 
         self.DISCRIPTION = self.config('description')
         self.MAP_X = self.rm.max_dis_x
@@ -79,8 +75,8 @@ class EnvMobile():
 
 
         '''these mat is **read-only** 因此可以放在init中 而不必放在reset中每次episode开始时都读'''
+        self.poi_mat = self.rm.init_pois()
         data_file_dir = f'envs/{self.input_args.dataset}'
-        self.poi_mat = self._init_pois(data_file_dir)
         self.debug_index = self.poi_mat[:,0,:].sum(axis=-1).argmin()  # tmp
         # == OK 对读的这几个列表进行裁剪，时间步240->121，poi数244->33 ==
         self.poi_arrival = np.load(os.path.join(data_file_dir, 'arrival.npy'))[:self.POI_NUM, :self.max_episode_steps + 1]  # shape = (33, 121)，其中33是poi数，121是episode的时间步数
@@ -104,20 +100,7 @@ class EnvMobile():
         self.stacked_obs = None
         self.reset()
 
-    def _init_pois(self, setting_dir):
-        '''读df并处理表头'''
-        setting_absdir = osp.join(project_dir, setting_dir)
-        poi_df = pd.read_csv(os.path.join(setting_absdir, 'human.csv'))
-        try:  # 如果df中有'pz'列, 删除它
-            poi_df.drop('pz', axis=1, inplace=True)
-        except: pass
-        assert poi_df.columns.to_list()[-2:] == ['px', 'py']
-        '''将df转换为np.array'''
-        poi_mat = np.expand_dims(poi_df[poi_df['id'] == 0].values[:, -2:], axis=0)  # idt
-        for id in range(1, self.POI_NUM):
-            subDf = poi_df[poi_df['id'] == id]
-            poi_mat = np.concatenate((poi_mat, np.expand_dims(subDf.values[:, -2:], axis=0)), axis=0)
-        return poi_mat  # shape = (33, 121, 2) 意为33个poi在121个时间步的坐标信息
+
 
 
     def reset(self):
@@ -195,7 +178,6 @@ class EnvMobile():
         # 若max_episode_step=120, 则执行120次step方法。episode结束时保存120个poi和uav的位置点，而不是icde的121个，把poi、uav的初始位置扔掉！
         self.step_count += 1
 
-        action = action['Discrete']
         uav_reward = np.zeros([self.UAV_NUM])
         uav_data_collect = np.zeros([self.UAV_NUM])
 
@@ -264,7 +246,6 @@ class EnvMobile():
         '''step3. episode结束时的后处理'''
         info = {}
         if done:
-            if self.debug: print('done时, self.step_count=', self.step_count)
             poi_visit_ratio = sum([int(len(p) > 0) for p in self.poi_collect_time]) / self.POI_NUM
             info['f_poi_visit_ratio'] = poi_visit_ratio
 
@@ -289,7 +270,7 @@ class EnvMobile():
 
             # self._plot_histograms(self.debug_all_r)
             # self._plot_aoi_trend(self.debug_index)
-            self.callback_write_trajs_to_storage()
+            self.save_trajs()
 
         self.get_obs()
         return self.get_obs_from_outside(), uav_reward, done, info
@@ -430,7 +411,6 @@ class EnvMobile():
                     self.poi_aoi[poi_index].append(yn * tn + 0.5 * yn * yn)
                     self.poi_wait_time[poi_index].append(now_time - self.poi_arrive_time[poi_index][index + 1])
                     reward = yn
-                    # if self.debug: print('在env中，收集一个包时的reward=', reward)
                     reward_list.append(reward * weight)
                     now_time += delta_t
                     assert now_time <= (self.step_count + 1) * self.TIME_SLOT + 1
@@ -692,17 +672,28 @@ class EnvMobile():
         plt.hist(data, bins=20, rwidth=0.8)
         plt.show()
 
-    def callback_write_trajs_to_storage(self, total_steps=1, is_newbest=False):
+    def save_trajs(self, total_steps=1, is_newbest=False):
         '''魔改自icde dummy_env的callback
         save trajs as .npz file, shape should be (33, 121, 2)，其中33是POI_NUM， 121是时间步数
         '''
-        assert self.phase is not None
         postfix = 'best' if is_newbest else str(total_steps)  # 现在total_steps其实恒为1，不过记录训练过程的轨迹也意义不大，先只记录best轨迹吧~
         save_traj_dir = osp.join(self.input_args.output_dir, f'{self.phase}_saved_trajs')
         if not osp.exists(save_traj_dir): os.makedirs(save_traj_dir)
-        np.savez(osp.join(save_traj_dir, f'eps_{postfix}.npz'), self.poi_mat, np.array(self.uav_trace))
+        np.savez(osp.join(save_traj_dir, f'eps_{postfix}.npz'), np.array(self.uav_trace))
 
         if is_newbest and self.phase == 'train':  # OK 暂时只画训练时的最优轨迹
             from tools.post.vis import render_HTML
             render_HTML(self.input_args.output_dir)
+            print('call vis.gif along with the training')
+
+    def save_trajs_2(self, best_trajs, total_steps=1,
+                     phase='train', is_newbest=False):
+        postfix = 'best' if is_newbest else str(total_steps)
+        save_traj_dir = osp.join(self.input_args.output_dir, f'{phase}_saved_trajs')
+        if not osp.exists(save_traj_dir): os.makedirs(save_traj_dir)
+        np.savez(osp.join(save_traj_dir, f'eps_{postfix}.npz'), best_trajs)
+
+        if is_newbest:
+            from tools.post.vis import render_HTML
+            render_HTML(self.input_args.output_dir, tag=phase)
             print('call vis.gif along with the training')

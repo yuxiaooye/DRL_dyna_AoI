@@ -7,7 +7,6 @@ from algorithms.models import GaussianActor, GraphConvolutionalModel, MLP, Categ
 from tqdm.std import trange
 # from algorithms.algorithm import ReplayBuffer
 from gym.spaces.box import Box
-from gym.spaces.discrete import Discrete
 import torch
 import torch.nn as nn
 from torch.distributions.categorical import Categorical
@@ -25,13 +24,16 @@ from algorithms.algo.buffer import MultiCollect, Trajectory, TrajectoryBuffer, M
 
 
 class OnPolicyRunner:
-    def __init__(self, logger, run_args, alg_args, agent, env_learn, env_test, env_args, **kwargs):
+    def __init__(self, logger, agent, envs_learn, envs_test, dummy_env,
+                 run_args, alg_args, input_args, **kwargs):
         self.run_args = run_args
+        self.input_args = input_args
         self.debug = self.run_args.debug
         self.logger = logger
         self.name = run_args.name
         # agent initialization
         self.agent = agent
+        self.num_agent = agent.n_agent
         self.device = self.agent.device if hasattr(self.agent, "device") else "cpu"
 
         if run_args.init_checkpoint is not None:  # not train from scratch
@@ -39,8 +41,9 @@ class OnPolicyRunner:
             self.agent.actors.load_state_dict(torch.load(run_args.init_checkpoint))
             logger.log(interaction=run_args.start_step)
         self.start_step = run_args.start_step
-        self.env_name = env_args.env
-        self.algo_name = env_args.algo
+        self.env_name = input_args.env
+        self.algo_name = input_args.algo
+        self.n_thread = input_args.n_thread
 
         # yyx add
         self.best_episode_reward = float('-inf')
@@ -61,12 +64,11 @@ class OnPolicyRunner:
         self.debug_use_stack_frame = alg_args.debug_use_stack_frame
 
         # environment initialization
-        self.env_learn = env_learn
-        self.env_test = env_test
+        self.envs_learn = envs_learn
+        self.envs_test = envs_test
+        self.dummy_env = dummy_env
 
         # buffer initialization
-        self.discrete = agent.discrete
-        action_dtype = torch.long if self.discrete else torch.float
         self.model_based = alg_args.model_based
         self.model_batch_size = alg_args.model_batch_size
         if self.model_based:
@@ -79,8 +81,10 @@ class OnPolicyRunner:
             self.model_length_schedule = alg_args.model_length_schedule
             self.model_prob = alg_args.model_prob
         # 一定注意，PPO并不是在每次调用rollout时reset，一次rollout和是否reset没有直接对应关系
-        self.env_learn.reset()
-        self.episode_len, self.episode_reward = 0, 0
+        _, self.episode_len = self.envs_learn.reset(), 0
+        # 每个环境分别记录episode_reward
+        self.episode_reward = np.zeros((self.input_args.n_thread))
+
 
         # load pretrained env model when model-based
         self.load_pretrained_model = alg_args.load_pretrained_model
@@ -109,14 +113,11 @@ class OnPolicyRunner:
                 self.agent.save_nets(dir_name=self.run_args.output_dir, episode=iter)
 
             trajs = self.rollout_env()  # TO cheak: rollout n_step, maybe multi trajs
-            t1 = time.time()
             if self.model_based:
                 self.model_buffer.storeTrajs(trajs)
                 # train the environment model
                 if iter % 10 == 0:
                     self.updateModel()
-            t2 = time.time()
-            # print('t=', t2 - t1)
 
             agentInfo = []
             real_trajs = trajs
@@ -148,30 +149,31 @@ class OnPolicyRunner:
         length = self.test_length
         returns = []
         lengths = []
-        episodes = []
+        # episodes = []
         for i in trange(self.n_test, desc='test'):
-            episode = []
-            done, ep_ret, ep_len = np.array([False]), 0, 0  # done就是把标量包装成array
-            env = self.env_test
-            env.reset()
-            while not (done.any() or (ep_len == length)):  # 测试时限定一个episode最大为length步
-                s = env.get_obs_from_outside()
-                a = self.agent.act(s).sample()
-                if len(a.shape) == 2 and a.shape[0] == 1:  # for IA2C and IC3Net
-                    a = a.squeeze(0)
+            # episode = []
+            done, ep_ret, ep_len = False, np.zeros((1,)), 0  # ep_ret改为分threads存
+            envs = self.envs_test
+            envs.reset()
+            while not (done or (ep_len == length)):  # 测试时限定一个episode最大为length步
+                s = envs.get_obs_from_outside()
+                a = self.agent.act(s).sample()  # shape = (-1, 3)
+                # if len(a.shape) == 2 and a.shape[0] == 1:  # for IA2C and IC3Net TODO 向量环境下这个需要改！
+                #     a = a.squeeze(0)
                 a = a.detach().cpu().numpy()  # # shape should be (UAV_NUM, )
-                s1, r, done, _ = env.step({'Discrete': a.tolist()})
-                episode += [(s.tolist(), a.tolist(), r)]
-                done = np.array(done)
-                ep_ret += sum(r)
+                s1, r, done, _ = envs.step(a.tolist())
+                # episode += [(s.tolist(), a.tolist(), r)]
+                done = done.any()
+                ep_ret += r.sum(axis=-1)  # 对各agent的奖励求和
                 ep_len += 1
                 self.logger.log(interaction=None)
-            if ep_ret > self.best_test_episode_reward:
-                self.best_test_episode_reward = ep_ret
-                self.env_test.callback_write_trajs_to_storage(is_newbest=True)
-            returns += [ep_ret]
+            if ep_ret.max() > self.best_test_episode_reward:
+                self.best_test_episode_reward = ep_ret.max()
+                best_eval_trajs = self.envs_test.get_saved_trajs()
+                self.dummy_env.save_trajs_2(
+                    best_eval_trajs[ep_ret.argmax()], phase='test', is_newbest=True)
+            returns += [ep_ret.sum()]
             lengths += [ep_len]
-            episodes += [episode]
         returns = np.stack(returns, axis=0)
         lengths = np.stack(lengths, axis=0)
         self.logger.log(test_episode_reward=returns.mean(),
@@ -189,74 +191,70 @@ class OnPolicyRunner:
         self.logger.log(test_time=time.time() - time_t)
         return returns.mean()
 
-    def rollout_env(self, length=0):  # 与环境交互得到trajs
+    def rollout_env(self):  # 与环境交互得到trajs
         """
         # yyx i了i了，这代码的注释太清晰了！
         The environment should return sth like [n_agent, dim] or [batch_size, n_agent, dim] in either numpy or torch.
         """
         time_t = time.time()
-        if length <= 0:
-            length = self.rollout_length
+        length = self.rollout_length
         trajs = []
         traj = TrajectoryBuffer(device=self.device)
-        start = time.time()
-        env = self.env_learn
-        for t in range(length):
-            s = env.get_obs_from_outside()
+        envs = self.envs_learn
+        for t in range(int(length/self.input_args.n_thread)):  # 加入向量环境后，控制总训练步数不变
+            s = envs.get_obs_from_outside()
             dist = self.agent.act(s)
             a = dist.sample()
             logp = dist.log_prob(a)
-            if len(a.shape) == 2 and a.shape[0] == 1:  # for IA2C and IC3Net
+            if len(a.shape) == 2 and a.shape[0] == 1:  # for IA2C and IC3Net  # TODO 向量环境下要改~
                 a = a.squeeze(0)
                 logp = logp.squeeze(0)
             a = a.detach().cpu().numpy()
-            s1, r, done, env_info = env.step({'Discrete': a.tolist()})
-            traj.store(s, a, r, s1, [done for _ in range(s.shape[0])], logp)
+            s1, r, done, env_info = envs.step(a.tolist())
+            done = done.any()
+            traj.store(s, a, r, s1,
+                       np.full((self.n_thread, self.num_agent), done),
+                       logp)
             episode_r = r
-            # if hasattr(env, '_comparable_reward'):
-            #     episode_r = env._comparable_reward()
-            if episode_r.ndim > 1:
-                episode_r = episode_r.mean(axis=0)
-            self.episode_reward += episode_r  # episode_r也是个列表 每个uav的奖励先相加
-            if self.debug: print('在main中的一个step, r=', episode_r)
+            assert episode_r.ndim > 1
+            episode_r = episode_r.sum(axis=-1)  # 对各agent奖励求和
+            self.episode_reward += episode_r
             self.episode_len += 1
             self.logger.log(interaction=None)
-            if self.episode_len == self.max_episode_len:
-                done = np.zeros(done.shape, dtype=np.float32)
-            done = np.array(done)
-            # 当episode结束或达到规定的最大步长，reset
-            if done.any() or (self.episode_len == self.max_episode_len):
-                ep_r = self.episode_reward.sum()
+
+            if done:
+                ep_r = self.episode_reward
                 print('train episode reward:', ep_r)
-                self.logger.log(episode_reward=ep_r, episode_len=self.episode_len, episode=None)
-                if ep_r > self.best_episode_reward:
-                    self.best_episode_reward = ep_r
-                    self.agent.save_nets(dir_name=self.run_args.output_dir, is_newbest=True)
-                    self.env_learn.callback_write_trajs_to_storage(is_newbest=True)
-                self.logger.log(collect_ratio=env_info['a_poi_collect_ratio'],
-                                violation_ratio=env_info['b_emergency_violation_ratio'],
-                                episodic_aoi=env_info['e_weighted_aoi'],
-                                threshold_aoi=env_info['f_weighted_bar_aoi'],
-                                energy_consuming_ratio=env_info['h_energy_consuming_ratio'],
+                self.logger.log(mean_episode_reward=ep_r.mean(), episode_len=self.episode_len, episode=None)
+                self.logger.log(max_episode_reward=ep_r.max(), episode_len=self.episode_len, episode=None)
+                try:
+                    if ep_r.max() > self.best_episode_reward:  # TODO 现在这里与歧义 让我用any or all
+                        self.best_episode_reward = ep_r.max()
+                        self.agent.save_nets(dir_name=self.run_args.output_dir, is_newbest=True)
+                        best_train_trajs = self.envs_learn.get_saved_trajs()
+                        self.dummy_env.save_trajs_2(
+                            best_train_trajs[self.episode_reward.argmax()], phase='train', is_newbest=True)
+                except:
+                    pass
+                self.logger.log(collect_ratio=sum(d['a_poi_collect_ratio'] for d in env_info) / len(env_info),
+                                violation_ratio=sum(d['b_emergency_violation_ratio'] for d in env_info) / len(env_info),
+                                episodic_aoi=sum(d['e_weighted_aoi'] for d in env_info) / len(env_info),
+                                threshold_aoi=sum(d['f_weighted_bar_aoi'] for d in env_info) / len(env_info),
+                                energy_consuming_ratio=sum(d['h_energy_consuming_ratio'] for d in env_info) / len(env_info),
                                 )
                 '''执行env的reset'''
                 try:
-                    _, self.episode_reward, self.episode_len = self.env_learn.reset(), 0, 0
+                    _, self.episode_len = self.envs_learn.reset(), 0
+                    self.episode_reward = np.zeros((self.input_args.n_thread))
                 except Exception as e:
                     raise NotImplementedError
-                    # print('reset error!:', e)
-                    # _, self.episode_reward, self.episode_len = self.env_learn.reset(), 0, 0
-                    # if self.model_based == False:
-                    #     trajs += traj.retrieve()
-                    #     traj = TrajectoryBuffer(device=self.device)
 
             if self.model_based and self.episode_len == self.max_episode_len:
+                # 这个操作对model_based重要么？我的环境永远不会触及max_episode_len=600的条件
                 trajs += traj.retrieve()
                 traj = TrajectoryBuffer(device=self.device)
         # --------------------------------------------------------------------------------------
-        end = time.time()
-        # print('time in 1 episode is ', end - start)
-        trajs += traj.retrieve(length=self.max_episode_len)
+        trajs += traj.retrieve()
         self.logger.log(env_rollout_time=time.time() - time_t)
         return trajs
 

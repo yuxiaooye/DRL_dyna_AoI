@@ -150,14 +150,14 @@ class TrajectoryBuffer:
         d = torch.as_tensor(d, device=device, dtype=torch.bool)
         a = torch.as_tensor(a, device=device)
         while s.dim() <= 2:
-            s = s.unsqueeze(dim=0)
+            s = s.unsqueeze(dim=0)  # 添加threads维度
         b, n, dim = s.size()
-        if d.dim() <= 1:
-            d = d.unsqueeze(0)
-        d = d[:, :n]
-        if r.dim() <= 1:
-            r = r.unsqueeze(0)
-        r = r[:, :n]
+        # if d.dim() <= 1:
+        #     d = d.unsqueeze(0)
+        # d = d[:, :n]
+        # if r.dim() <= 1:
+        #     r = r.unsqueeze(0)
+        # r = r[:, :n]
         [s, a, r, s1, d, logp] = [item.view(b, n, -1) for item in [s, a, r, s1, d, logp]]
         self.s.append(s)
         self.a.append(a)
@@ -166,10 +166,10 @@ class TrajectoryBuffer:
         self.d.append(d)
         self.logp.append(logp)
     
-    def retrieve(self, length=None):
+    def retrieve(self):
         """
         Returns trajectories with s, a, r, s1, d, logp.
-        Data are of size [T, n_agent, dim]
+        Data are of size [T, n_thread, n_agent, dim]
         """
         names = ["s", "a", "r", "s1", "d", "logp"]
         trajs = []
@@ -177,12 +177,12 @@ class TrajectoryBuffer:
         if self.s == []:
             return []
         for name in names:
-            traj_all[name] = torch.stack(self.__getattribute__(name), dim=1)
+            traj_all[name] = torch.stack(self.__getattribute__(name), dim=1)  # stack后，shape = (n_thread, T, n_agent, dim)
         n = traj_all['s'].size()[0]
         for i in range(n):
             traj_dict = {}
             for name in names:
-                traj_dict[name] = traj_all[name][i]  #ndecth batch into single traj
+                traj_dict[name] = traj_all[name][i]
             trajs.append(Trajectory(**traj_dict))
         return trajs
 

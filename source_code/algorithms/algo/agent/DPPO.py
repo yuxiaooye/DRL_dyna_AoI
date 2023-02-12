@@ -16,7 +16,6 @@ from tqdm.std import trange
 # from algorithms.algorithm import ReplayBuffer
 
 from gym.spaces.box import Box
-from gym.spaces.discrete import Discrete
 import torch
 import torch.nn as nn
 from torch.distributions.categorical import Categorical
@@ -37,12 +36,9 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
 
     def __init__(self, logger, device, agent_args, input_args, **kwargs):
         super().__init__()
-        self.discrete = True  # 硬编码
-        if self.discrete:
-            self.action_dim = 9  # 硬编码
-            self.action_shape = self.action_dim
-        else:
-            raise NotImplementedError
+        self.action_dim = 9  # 硬编码
+        self.action_shape = self.action_dim
+
 
         self.logger = logger  # LogClient类对象
         self.device = device
@@ -81,29 +77,30 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
         self.optimizer_v = Adam(self.vs.parameters(), lr=self.lr_v)
         self.optimizer_pi = Adam(self.actors.parameters(), lr=self.lr)
 
-    def act(self, s, requires_log=False):
+    def act(self, s):
         """
-        Requires input of [batch_size, n_agent, dim] or [n_agent, dim].
+        非向量环境：Requires input of [batch_size, n_agent, dim] or [n_agent, dim].
+        向量环境：Requires input of [batch_size*n_thread, n_agent, dim] or [n_thread, n_agent, dim].
+        其中第一维度的值在后续用-1表示
         This method is gradient-free. To get the gradient-enabled probability information, use get_logp().
         Returns a distribution with the same dimensions of input.
         """
         with torch.no_grad():
             dim = s.dim()
-            while s.dim() <= 2:
-                s = s.unsqueeze(0)
+            assert s.dim() == 3
+            # while s.dim() <= 2:
+            #     s = s.unsqueeze(0)
             s = s.to(self.device)
-            s = self.collect_pi.gather(s)  # all state into [ self +  ]
-            # Now s[i].dim() == 2 ([batch_size, dim])
-            if self.discrete:
-                probs = []
-                for i in range(self.n_agent):
-                    probs.append(self.actors[i](s[i]))
-                probs = torch.stack(probs, dim=1)
-                while probs.dim() > dim:
-                    probs = probs.squeeze(0)
-                return Categorical(probs)
-            else:
-                raise NotImplementedError
+            s = self.collect_pi.gather(s)
+            # Now s[i].dim() == ([-1, dim]) 注意不同agent的dim不同，由它的邻居数量决定
+            probs = []
+            for i in range(self.n_agent):
+                probs.append(self.actors[i](s[i]))
+            probs = torch.stack(probs, dim=1)  # shape = (-1, NUM_AGENT, act_dim)
+            # while probs.dim() > dim:
+            #     probs = probs.squeeze(0)
+            return Categorical(probs)
+
 
     def get_logp(self, s, a):
         """
@@ -123,11 +120,8 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
         # Now s[i].dim() == 2, a.dim() == 3
         log_prob = []
         for i in range(self.n_agent):
-            if self.discrete:
-                probs = self.actors[i](s[i])
-                log_prob.append(torch.log(torch.gather(probs, dim=-1, index=torch.select(a, dim=1, index=i).long())))
-            else:
-                log_prob.append(self.actors[i](s[i], a.select(dim=1, index=i)))
+            probs = self.actors[i](s[i])
+            log_prob.append(torch.log(torch.gather(probs, dim=-1, index=torch.select(a, dim=1, index=i).long())))
         log_prob = torch.stack(log_prob, dim=1)
         while log_prob.dim() < 3:
             log_prob = log_prob.unsqueeze(-1)
@@ -139,28 +133,21 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
             clip = self.clip
         n_minibatch = self.n_minibatch
 
-        names = Trajectory.names()
+        names = Trajectory.names()  # ['s', 'a', 'r', 's1', 'd', 'logp']
         traj_all = {name: [] for name in names}
-        max_traj_length = max([i.length for i in trajs])
-        for traj in trajs:
+        for traj in trajs:  # len(trajs) == n_thread
             for name in names:
-                tensor_shape = traj[name].shape
-                full_part_shape = [max_traj_length - tensor_shape[0]] + list(tensor_shape[1:])
-                if name == 'd':
-                    traj_all[name].append(torch.cat([traj[name], torch.ones(full_part_shape, dtype=torch.bool, device=self.device)], dim=0))
-                else:
-                    traj_all[name].append(torch.cat([traj[name], torch.zeros(full_part_shape, dtype=traj[name].dtype, device=self.device)], dim=0))
+                traj_all[name].append(traj[name])
         traj = {name: torch.stack(value, dim=0) for name, value in traj_all.items()}
 
         for i_update in range(self.n_update_pi):
             s, a, r, s1, d, logp = traj['s'], traj['a'], traj['r'], traj['s1'], traj['d'], traj['logp']
             s, a, r, s1, d, logp = [item.to(self.device) for item in [s, a, r, s1, d, logp]]
-            # all in shape [batch_size, T, n_agent, dim]
-            value_old, returns, advantages, reduced_advantages = self._process_traj(**traj)
-
+            # 关键：all in shape [n_thread, T, n_agent, dim]
+            value_old, returns, advantages, reduced_advantages = self._process_traj(**traj)  # 不同traj分开计算adv和return
             advantages_old = reduced_advantages if self.use_reduced_v else advantages
 
-            b, T, n, d_s = s.size()
+            _, T, n, d_s = s.size()
             d_a = a.size()[-1]
             s = s.view(-1, n, d_s)
             a = a.view(-1, n, d_a)
@@ -168,7 +155,7 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
             advantages_old = advantages_old.view(-1, n, 1)
             returns = returns.view(-1, n, 1)
             value_old = value_old.view(-1, n, 1)
-            # s, a, logp, adv, ret, v are now all in shape [-1, n_agent, dim]
+            # 关键：s, a, logp, adv, ret, v are now all in shape [-1, n_agent, dim] 因为计算完adv和return后可以揉在一起做mini_batch训练
             batch_total = logp.size()[0]
             batch_size = int(batch_total / n_minibatch)
 
@@ -192,10 +179,7 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
                 self.optimizer_pi.zero_grad()
                 loss_pi.backward()
                 self.optimizer_pi.step()
-                try:
-                    self.logger.log(surr_loss=loss_surr, entropy=loss_entropy, kl_divergence=kl, pi_update=None)
-                except:
-                    pass
+                self.logger.log(surr_loss=loss_surr, entropy=loss_entropy, kl_divergence=kl, pi_update=None)
                 kl_all.append(kl.abs().item())
                 if self.target_kl is not None and kl.abs() > 1.5 * self.target_kl:
                     break
@@ -257,10 +241,8 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
         actors = nn.ModuleList()
         for i in range(self.n_agent):
             self.pi_args.sizes[0] = collect_pi.degree[i] * self.observation_dim
-            if self.discrete:
-                actors.append(CategoricalActor(**self.pi_args._toDict()).to(self.device))
-            else:
-                actors.append(GaussianActor(action_dim=self.action_dim, **self.pi_args._toDict()).to(self.device))
+            actors.append(CategoricalActor(**self.pi_args._toDict()).to(self.device))
+
         return collect_pi, actors
 
     def _init_vs(self):

@@ -33,8 +33,8 @@ from algorithms.algo.buffer import MultiCollect, Trajectory, TrajectoryBuffer, M
 
 
 class ModelBasedAgent(nn.ModuleList):
-    def __init__(self, logger, device, agent_args, env_args, **kwargs):
-        super().__init__(logger, device, agent_args, env_args, **kwargs)
+    def __init__(self, logger, device, agent_args, input_args, **kwargs):
+        super().__init__(logger, device, agent_args, input_args, **kwargs)
         self.logger = logger
         self.device = device
         self.lr_p = agent_args.lr_p
@@ -127,7 +127,7 @@ class HiddenAgent(ModelBasedAgent):
         self.embedding_layers = self._init_embedding_layers()
         self.optimizer_p.add_param_group({'params': self.embedding_layers.parameters()})
 
-    def act(self, s, requires_log=False):
+    def act(self, s, requires_log=False):  # TODO 这里要适配向量环境 s.shape前增加n_threads维度
         s = s.detach()
         if s.size()[-1] != self.hidden_state_dim:
             s = self._state_embedding(s).detach()
@@ -167,8 +167,8 @@ class HiddenAgent(ModelBasedAgent):
 
 # yyx wow, 继承自两个父类，有的学习了
 class DMPOAgent(ModelBasedAgent, DPPOAgent):
-    def __init__(self, logger, device, agent_args, env_args, **kwargs):
-        super().__init__(logger, device, agent_args, env_args, **kwargs)
+    def __init__(self, logger, device, agent_args, input_args, **kwargs):
+        super().__init__(logger, device, agent_args, input_args, **kwargs)
 
     def checkConverged(self, ls_info):
         rs = [info[0] for info in ls_info]

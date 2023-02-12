@@ -35,7 +35,7 @@ class CPPOAgent(nn.ModuleList, YyxAgentBase):
     """
     Everything in and out is torch Tensor.
     """
-    def __init__(self, logger, device, agent_args, env_args, **kwargs):
+    def __init__(self, logger, device, agent_args, input_args, **kwargs):
         super().__init__()
         self.discrete = True  # 硬编码
         if self.discrete:
@@ -62,8 +62,8 @@ class CPPOAgent(nn.ModuleList, YyxAgentBase):
         self.use_reduced_v = agent_args.use_reduced_v
         self.use_rtg = agent_args.use_rtg
         self.use_gae_returns = agent_args.use_gae_returns
-        self.env_name = env_args.env
-        self.algo_name = env_args.algo
+        self.env_name = input_args.env
+        self.algo_name = input_args.algo
         self.advantage_norm = agent_args.advantage_norm
         self.observation_dim = agent_args.observation_dim
         self.action_space = agent_args.action_space
