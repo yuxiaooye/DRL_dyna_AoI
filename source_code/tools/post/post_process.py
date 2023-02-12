@@ -1,5 +1,6 @@
 '''
 conduct bat_rm.py and walk_summary.py for multiple groups of exp
+状态：这次jsac暂时deprecated，还需要改
 '''
 
 import argparse

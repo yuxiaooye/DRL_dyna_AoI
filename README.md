@@ -14,7 +14,7 @@
 │   ├── env_configs  # 环境参数
 │   └── tools  # 功能脚本，预处理和后处理
 │   │   ├── post
-│   │   │   ├── vis_gif.py  # 训练后绘制html可视化文件
+│   │   │   ├── vis.py  # 训练后绘制html可视化文件
 │   ├── main_DPPO.py  # 训练启动入口脚本
 ```
 
@@ -22,7 +22,7 @@
 
 ## How to train
 
-conda环境请参见服务器77的yyx_adept环境
+conda环境为yyx_adept(10.1.114.77)，yyx_ishen(10.1.114.75)。依赖项不多，哪个包缺了手动pip即可。
 
 启动训练：
 
@@ -50,20 +50,28 @@ python main_DPPO.py
 ├── params.json  # 记录本次实验的参数防止遗忘
 ├── test_saved_trajs  # 测试episode的最优uav轨迹
 └── train_saved_trajs  # 训练episode的最优uav轨迹
+└── vis.html  # 根据最优uav轨迹绘制的html可视化文件
 ```
 
 除tensorboard外，还实现了基于wandb的可视化，本地结果存放在`wandb`路径下。
 
-绘制html格式的可视化轨迹：
+手动绘制html可视化文件：
 
 ```sh
 cd source_code
-python tools/post/vis_gif.py --output_dir <OUTPUT_DIR>
+python tools/post/vis.py --output_dir <OUTPUT_DIR>
 ```
 
 在实验结果文件夹下生成`vis.html`：
 
-<img src="https://cdn.jsdelivr.net/gh/1candoallthings/figure-bed@main/img/202302081401687.png" alt="image-20230208140132293" style="zoom:33%;" />
+<img src="https://cdn.jsdelivr.net/gh/1candoallthings/figure-bed@main/img/202302112014826.png" alt="image-20230211201439409" style="zoom: 25%;" />
+
+批量绘制一个group下所有实验的可视化文件：
+```sh
+cd source_code
+python tools/post/bat_vis.py --group_dir <GROUP_DIR>
+```
+其中GROUP_DIR是OUTPUT_DIR的父目录。
 
 ## How to inference
 

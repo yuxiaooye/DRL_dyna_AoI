@@ -9,7 +9,7 @@ from algorithms.utils import Config
 def getArgs(radius_p, radius_v, radius_pi, env):
 
     alg_args = Config()
-    alg_args.n_iter = 25000
+    alg_args.n_iter = 5000  # 25000
     alg_args.n_inner_iter = 1
     alg_args.n_warmup = 50
     alg_args.n_model_update = int(1e4)
@@ -108,7 +108,7 @@ def getArgs(radius_p, radius_v, radius_pi, env):
 # def getArgs(radius_p, radius_v, radius_pi, env):
 #
 #     alg_args = Config()
-#     alg_args.n_iter = 25000
+#     alg_args.n_iter = 5000  # 25000
 #     alg_args.n_inner_iter = 1
 #     alg_args.n_warmup = 0
 #     alg_args.n_model_update = 5

@@ -7,7 +7,7 @@ from algorithms.utils import Config
 
 def getArgs(radius_p, radius_v, radius_pi, env):
     alg_args = Config()
-    alg_args.n_iter = 25000
+    alg_args.n_iter = 5000  # 25000
     alg_args.n_inner_iter = 10  # 在一个n_iter循环执行多少次内循环，内循环意为执行一次rollout_model() agent与learned model交互并更新一次Agent参数
     alg_args.n_warmup = 50
     alg_args.n_model_update = int(5e2)

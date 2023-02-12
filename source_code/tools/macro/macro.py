@@ -18,16 +18,7 @@ FIVE_UH_INDEX = ['UH=50', 'UH=70', 'UH=90', 'UH=120', 'UH=150']
 ## compare，walkfive_{algo}.csv，df
 ALGOS = ['OurSolution', 'Our(CoPO)', 'MAPPO', 'maddpg', 'TSP', 'random']
 
-## compare
-# yrange_for_metrics = {
-#         "Data Collection Ratio": [0.0, 1.2],
-#         "Data Loss Ratio": [0, 0.3],
-#         "Energy Consumption Ratio": [0.0, 0.5],
-#         "Geographical Fairness": [0.0, 1.2],
-#         "Efficiency": [0.0, 12.0],
-#     }
 
-# 4_25
 yrange_for_metrics = {
         "Data Collection Ratio": [0.0, 1.3],
         "Data Loss Ratio": [0, 0.35],

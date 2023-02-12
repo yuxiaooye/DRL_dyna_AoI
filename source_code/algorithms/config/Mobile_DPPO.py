@@ -10,14 +10,16 @@ from algorithms.utils import Config
 def getArgs(radius_p, radius_v, radius_pi, env):
 
     alg_args = Config()
-    alg_args.n_iter = 25000
+    # 总训练步数 = n_iter * rollout_length，默认25K * 0.6K = 15M
+    # 改为5K * 0.6K = 6M
+    alg_args.n_iter = 5000  # 25000
     alg_args.n_inner_iter = 1
     alg_args.n_warmup = 0
     alg_args.n_model_update = 5
     alg_args.n_model_update_warmup = 10
     alg_args.n_test = 1  # default=5, 意为每次test 5个episode
     alg_args.test_interval = 20
-    alg_args.rollout_length = 600  # 也即PPO中的T_horizon
+    alg_args.rollout_length = 600  # 也即PPO中的T_horizon，
     alg_args.test_length = 600
     alg_args.max_episode_len = 600
     alg_args.model_based = False

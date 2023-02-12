@@ -702,8 +702,7 @@ class EnvMobile():
         if not osp.exists(save_traj_dir): os.makedirs(save_traj_dir)
         np.savez(osp.join(save_traj_dir, f'eps_{postfix}.npz'), self.poi_mat, np.array(self.uav_trace))
 
-        if is_newbest:  # OK   # add call vis_gif.py
-            # os.system(f"python tools/post/vis_gif.py --output_dir {self.input_args.output_dir}")
-            from tools.post.vis_gif import render_HTML
-            render_HTML(self.input_args.output_dir, tag=self.phase)
+        if is_newbest and self.phase == 'train':  # OK 暂时只画训练时的最优轨迹
+            from tools.post.vis import render_HTML
+            render_HTML(self.input_args.output_dir)
             print('call vis.gif along with the training')

@@ -13,12 +13,12 @@ import movingpandas as mpd
 from folium.plugins import TimestampedGeoJson
 import argparse
 
-assert os.getcwd().endswith('source_code'), '请将工作路径设为source_code'
+assert os.getcwd().endswith('source_code'), '请将工作路径设为source_code，否则无法正确导入包'
 sys.path.append(os.getcwd())
 from env_configs.roadmap_env.roadmap_utils import *
 
-# TODO 这个函数也需要被环境调用，边训练边画图~~
-def render_HTML(output_dir, tag, traj_filename='eps_best.npz'):
+
+def render_HTML(output_dir, tag='train', traj_filename='eps_best.npz'):
     '''从output_dir中拿到轨迹'''
     traj_file = osp.join(output_dir, f'{tag}_saved_trajs/{traj_filename}')
     trajs = np.load(traj_file)
@@ -134,7 +134,7 @@ def render_HTML(output_dir, tag, traj_filename='eps_best.npz'):
 
     # save
     save_file = os.path.join(output_dir, f'vis.html')
-    print('------save_file = ', save_file)
+    # print('------save_file = ', save_file)
     map.get_root().save(save_file)
 
     print('OK!')
