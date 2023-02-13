@@ -62,7 +62,7 @@ def initAgent(logger, device, agent_args, input_args):
 
 def override(alg_args, run_args, input_args):
     if run_args.debug:
-        alg_args.model_batch_size = 4
+        alg_args.model_batch_size = 5  # 用于训练一次model的traj数量
         alg_args.max_ep_len = 5
         alg_args.rollout_length = 20 * input_args.n_thread
         alg_args.test_length = 600  # 测试episode的最大步长
@@ -70,6 +70,7 @@ def override(alg_args, run_args, input_args):
         alg_args.n_model_update = 3
         alg_args.n_model_update_warmup = 3
         alg_args.n_warmup = 1
+        alg_args.model_prob = 1  # 规定一定会执行从model中采样用于更新policy的经验
         # 注意: n_iter*rollout_length得比一个episode长，不然一次train episode done都不触发，train_trajs不会保存到外存
         alg_args.n_iter = 7
         alg_args.n_test = 1
@@ -106,6 +107,12 @@ def override(alg_args, run_args, input_args):
         run_args.name += f'_FutureObs={input_args.future_obs}'
     if input_args.use_fixed_range:
         run_args.name += f'_FixedRange'
+    if not input_args.use_extended_value:
+        run_args.name += f'_NotUseExtendedValue'
+    if input_args.use_mlp_model:
+        run_args.name += f'_MLPModel'
+    if input_args.multi_mlp:
+        run_args.name += f'_MultiMLP'
 
     # tune algo
     if input_args.lr is not None:
@@ -143,11 +150,14 @@ def parse_args():
     parser.add_argument('--mute_wandb', default=False, action='store_true')
     # tune agent
     parser.add_argument('--init_checkpoint', type=str)  # load pretrained model
-    parser.add_argument('--n_thread', type=int, default=1)
+    parser.add_argument('--n_thread', type=int, default=2)
     # tune algo
     parser.add_argument('--lr', type=float)
     parser.add_argument('--lr_v', type=float)
     parser.add_argument('--debug_use_stack_frame', action='store_true')
+    parser.add_argument('--use-extended-value', action='store_false', help='反逻辑，仅用于DPPO')
+    parser.add_argument('--use-mlp-model', action='store_true', help='将model改为最简单的mlp，仅用于DMPO')
+    parser.add_argument('--multi-mlp', action='store_true', help='在model中分开预测obs中不同类别的信息，仅用于DMPO')
     # tune env
     parser.add_argument('--use_fixed_range', action='store_true')
     parser.add_argument('--snr', type=float, default=200)
@@ -158,14 +168,12 @@ def parse_args():
     parser.add_argument('--future_obs', type=int, default=0)
     args = parser.parse_args()
 
+    if args.multi_mlp:
+        assert args.use_mlp_model
 
     if args.debug:
-        args.group = 'debug'
-        args.output_dir = 'runs/debug'
-        args.n_thread = 2
-
+        assert args.group == 'debug'
     args.output_dir = f'runs/{args.group}'
-
     return args
 
 input_args = parse_args()
@@ -218,11 +226,6 @@ record_input_args(input_args, env_args, run_args.output_dir)
 from env_configs.wrappers.env_wrappers import SubprocVecEnv
 envs_train = SubprocVecEnv([env_fn_train(env_args, input_args, phase='train') for _ in range(input_args.n_thread)])
 envs_test = SubprocVecEnv([env_fn_test(env_args, input_args, phase='test') for _ in range(1)])
-
-
-
-
-
 
 
 os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3,4,5,6,7'

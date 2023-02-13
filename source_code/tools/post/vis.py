@@ -12,6 +12,9 @@ import geopandas as gpd
 import movingpandas as mpd
 from folium.plugins import TimestampedGeoJson
 import argparse
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)  # 不显示pandas的FutureWarning
+
 
 assert os.getcwd().endswith('source_code'), '请将工作路径设为source_code，否则无法正确导入包'
 sys.path.append(os.getcwd())
@@ -38,8 +41,8 @@ def render_HTML(output_dir, tag='train', traj_filename='eps_best.npz'):
     traj_file = osp.join(output_dir, f'{tag}_saved_trajs/{traj_filename}')
     trajs = np.load(traj_file)
     # poi_trajs, uav_trajs = list(trajs['arr_0']), list(trajs['arr_1'])
-    poi_trajs = rm.init_pois()  # TODO 直接根据params.json读NCSU文件夹下的，没必要读输出文件夹下的
-    uav_trajs = list(trajs['arr_0'])  # OK
+    poi_trajs = rm.init_pois()
+    uav_trajs = list(trajs['arr_0'])
 
     map = folium.Map(location=[(rm.lower_left[1] + rm.upper_right[1]) / 2, (rm.lower_left[0] + rm.upper_right[0]) / 2],
                      tiles="cartodbpositron", zoom_start=14, max_zoom=24)

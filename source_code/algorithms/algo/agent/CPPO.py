@@ -267,8 +267,6 @@ class CPPOAgent(nn.ModuleList, YyxAgentBase):
         return torch.stack(values, dim=1)
 
     def _init_actors(self):
-        if self.env_name == 'UAV_9d' and self.algo_name == 'CPPO':
-            self.adj = torch.as_tensor(np.ones((25, 25)), device=self.device, dtype=torch.float)
         
         collect_pi = MultiCollect(torch.matrix_power(self.adj, self.radius_pi), device=self.device)
         actors = nn.ModuleList()
@@ -281,8 +279,6 @@ class CPPOAgent(nn.ModuleList, YyxAgentBase):
         return collect_pi, actors
     
     def _init_vs(self):
-        if self.env_name == 'UAV_9d' and self.algo_name == 'CPPO':
-            self.adj = torch.as_tensor(np.ones((25, 25)), device=self.device, dtype=torch.float)
             
         collect_v = MultiCollect(torch.matrix_power(self.adj, self.radius_v), device=self.device)
         vs = nn.ModuleList()

@@ -39,6 +39,7 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
         self.action_dim = 9  # 硬编码
         self.action_shape = self.action_dim
 
+        self.use_extended_value = input_args.use_extended_value
 
         self.logger = logger  # LogClient类对象
         self.device = device
@@ -227,14 +228,18 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
         # s变为有n_agent个元素的列表 且元素.shape = [-1, 邻域agent数量*dim]
         # 各个agent的元素.shape不相同！因为邻域规模不同
         # 得到的是s_{N_j}
-        s = self.collect_v.gather(s)
+        if self.use_extended_value:
+            s = self.collect_v.gather(s)
+        else:
+            n = s.shape[1]
+            assert n == self.n_agent
+            s = [s[:,i,:] for i in range(n)]  # 搞成和前者类似的shape
         values = []
         for i in range(self.n_agent):
             values.append(self.vs[i](s[i]))
         # 填充后，values是有n_agent个元素的列表 元素.shape = (-1, 1)
         # 得到的是V_j(s_{N_j}) 也即式(6)
         return torch.stack(values, dim=1)
-
     def _init_actors(self):
         # collect_pi.degree = [2,3,2] 意为一个agent与多少个agent连接（包括自己）
         collect_pi = MultiCollect(torch.matrix_power(self.adj, self.radius_pi), device=self.device)
@@ -246,14 +251,14 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
         return collect_pi, actors
 
     def _init_vs(self):
-        if self.env_name == 'UAV_9d' and self.algo_name == 'CPPO':
-            self.adj = torch.as_tensor(np.ones((25, 25)), device=self.device, dtype=torch.float)
-
         collect_v = MultiCollect(torch.matrix_power(self.adj, self.radius_v), device=self.device)
         vs = nn.ModuleList()
         for i in range(self.n_agent):
             # .degree[i]就是agent i的邻域规模
-            self.v_args.sizes[0] = collect_v.degree[i] * self.observation_dim
+            if self.use_extended_value:
+                self.v_args.sizes[0] = collect_v.degree[i] * self.observation_dim
+            else:
+                self.v_args.sizes[0] = self.observation_dim
             v_fn = self.v_args.network
             vs.append(v_fn(**self.v_args._toDict()).to(self.device))
         return collect_v, vs
@@ -266,7 +271,7 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
         b, T, n, dim_s = s.shape
         s, a, r, s1, d, logp = [item.to(self.device) for item in [s, a, r, s1, d, logp]]
         # 过网络前先merge前两个维度，过网络后再复原
-        value = self._evalV(s.view(-1, n, dim_s)).view(b, T, n, -1)
+        value = self._evalV(s.view(-1, n, dim_s)).view(b, T, n, -1)  # 在_evalV中实现了具体的扩展值函数逻辑
 
         returns = torch.zeros(value.size(), device=self.device)
         deltas, advantages = torch.zeros_like(returns), torch.zeros_like(returns)

@@ -170,6 +170,7 @@ class TrajectoryBuffer:
         """
         Returns trajectories with s, a, r, s1, d, logp.
         Data are of size [T, n_thread, n_agent, dim]
+        返回n_thread条traj
         """
         names = ["s", "a", "r", "s1", "d", "logp"]
         trajs = []

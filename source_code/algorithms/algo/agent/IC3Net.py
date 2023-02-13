@@ -62,7 +62,7 @@ class IC3Net(nn.ModuleList, YyxAgentBase):
         self.use_reduced_v = agent_args.use_reduced_v
         self.use_rtg = agent_args.use_rtg
         self.use_gae_returns = agent_args.use_gae_returns
-        self.all_comm = True # TODO: need to update
+        self.all_comm = True # need to update
         self.advantage_norm = agent_args.advantage_norm
         self.observation_dim = agent_args.observation_dim
         self.action_space = agent_args.action_space
@@ -108,7 +108,7 @@ class IC3Net(nn.ModuleList, YyxAgentBase):
             self.actors = nn.ModuleList([GaussianActor(action_dim=self.action_dim, **self.pi_args._toDict()).to(self.device) for i in range(self.n_agent)])
 
         # activation function
-        self.activation_function = torch.nn.ReLU(inplace=True) #TODO: add to config file
+        self.activation_function = torch.nn.ReLU(inplace=True)  # add to config file
 
 
     def updateAgent(self, trajs, clip=None):
@@ -202,7 +202,6 @@ class IC3Net(nn.ModuleList, YyxAgentBase):
         self.logger.log(pi_update_step=1)
 
     def checkConverged(self, ls_info):
-        #TODO: not neccessary
         return False
 
     def group_inference(self, model, data):
@@ -229,7 +228,7 @@ class IC3Net(nn.ModuleList, YyxAgentBase):
         if self.all_comm == True:
             batch_comm_adj = self.adj.unsqueeze(0).repeat(s.shape[0], 1, 1)
         else:
-            # TODO: check if need detach
+            # check if need detach (from original author)
             comm_gate = torch.stack(
                 [torch.stack([torch.multinomial(dis, 1).detach() for dis in n_dis]) for n_dis in
                  comm_gate_distirbution])
@@ -318,7 +317,6 @@ class IC3Net(nn.ModuleList, YyxAgentBase):
         return log_prob
 
     def _evalV(self, s):
-        # TODO：
         # Requires input in shape [-1, n_agent, dim]
         s = s.to(self.device)
 

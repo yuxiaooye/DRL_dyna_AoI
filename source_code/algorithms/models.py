@@ -17,7 +17,7 @@ from torch.optim import Adam
 # from .base_util import batch_to_seq, init_layer, one_hot
 
 
-def MLP(sizes, activation, output_activation=nn.Identity, **kwargs):
+def MLP(sizes, activation=nn.ReLU, output_activation=nn.Identity, **kwargs):
     layers = []
     for j in range(len(sizes) - 1):
         act = activation if j < len(sizes) - 2 else output_activation
@@ -336,6 +336,67 @@ class EnsembledModel(nn.Module):
         return loss_
 
 
+class YyxMLPModel(nn.Module):  # 在更深入地重复造轮子之前，先浏览一下这个脚本里有没有能用的东西~
+    def __init__(self, logger, obs_dim, p_args, multi_mlp=False):
+        super().__init__()
+
+        if multi_mlp:
+            self.pos_mlp = MLP(sizes=(33*2, 128, ))
+        else:
+            hd = 256
+            self.fc = MLP(sizes=(obs_dim+1, 256, hd))
+            self.s1s_branch = MLP(sizes=(hd, obs_dim))
+            self.rs_branch = MLP(sizes=(hd, 1))
+        self.multi_mlp = multi_mlp
+
+        self.logger = logger
+        self.reward_coeff = p_args.reward_coeff
+
+        self.MSE = nn.MSELoss(reduction='none')
+        self.BCE = nn.BCELoss(reduction='none')
+
+    def forward(self, s, a):
+        input = torch.cat([s, a], dim=-1)
+        h = self.fc(input)
+        rs = self.rs_branch(h)
+        s1s = self.s1s_branch(h)
+        return rs, s1s
+
+    def train(self, s, a, r, s1, length=1):
+        '''和GCN的train函数完全一致，只是不预测无意义的done了~'''
+        pred_s, pred_r = [], []
+        s0 = s.select(dim=1, index=0)
+        length = min(length, s.shape[1])
+        for t in range(length):
+            r_, s_, = self.forward(s0, a.select(dim=1, index=t))
+            pred_r.append(r_)
+            pred_s.append(s_)
+            s0 = s_
+        reward_pred = torch.stack(pred_r, dim=1)
+        state_pred = torch.stack(pred_s, dim=1)
+
+        state_loss = self.MSE(state_pred, s1).mean()
+        s1_view = s1.view(-1, s1.shape[-1])
+        state_var = self.MSE(s1_view, s1_view.mean(dim=0, keepdim=True).expand(*s1_view.shape))
+        rel_state_loss = state_loss / (state_var.mean() + 1e-7)
+        self.logger.log(state_loss=state_loss, state_var=state_var.mean(), rel_state_loss=rel_state_loss)
+        loss = state_loss
+
+        reward_loss = self.MSE(reward_pred, r)
+        loss += self.reward_coeff * reward_loss.mean()
+        r_view = r.view(-1, r.shape[-1])
+        reward_var = self.MSE(r_view, r_view.mean(dim=0, keepdim=True).expand(*r_view.shape)).mean()
+        rel_reward_loss = reward_loss.mean() / (reward_var.mean() + 1e-7)
+
+        self.logger.log(reward_loss=reward_loss,
+                        reward_var=reward_var,
+                        reward=r,
+                        reward_norm=torch.norm(r),
+                        rel_reward_loss=rel_reward_loss)
+
+        return (loss, rel_state_loss)
+
+
 class GraphConvolutionalModel(nn.Module):
     class EdgeNetwork(nn.Module):
         def __init__(self, i, j, sizes, activation=nn.ReLU, output_activation=nn.Identity):
@@ -434,6 +495,7 @@ class GraphConvolutionalModel(nn.Module):
 
     def predict(self, s, a):
         """
+            输入s,a 输出
             Input: 
                 s: [batch_size, n_agent, state_dim]
                 a: [batch_size, n_agent, action_dim]
@@ -453,10 +515,11 @@ class GraphConvolutionalModel(nn.Module):
         loss: 综合包含了预测的s' r done的损失。损失函数就是MSE~~
         rel_state_loss: 针对预测的s'的损失 除以标准差进行某种程度的归一化~
         """
-        pred_s, pred_r, pred_d = [], [], []
-        s0 = s.select(dim=1, index=0)
-        length = min(length, s.shape[1])
 
+        '''前向传播预测'''
+        pred_s, pred_r, pred_d = [], [], []
+        s0 = s.select(dim=1, index=0)  # 时序上最靠前的那个~
+        length = min(length, s.shape[1])  # 就是T_horizon
         for t in range(length):
             # yyx 这里进行model-based中env model的前向传播
             # 输入是s和a 输出是预测的s' r done
@@ -473,7 +536,7 @@ class GraphConvolutionalModel(nn.Module):
         s1_view = s1.view(-1, s1.shape[-1])  # shape = (48, 238)  # 其中48意为将前三个维度堆叠在一起
         state_var = self.MSE(s1_view, s1_view.mean(dim=0, keepdim=True).expand(*s1_view.shape))  # shape = (48, 238)
         rel_state_loss = state_loss / (state_var.mean() + 1e-7)
-        # TODO 这个state_var是什么意思？同理下面的reward_var
+        # yyx: 这个state_var是什么意思？同理下面的reward_var
         self.logger.log(state_loss=state_loss, state_var=state_var.mean(), rel_state_loss=rel_state_loss)
         loss = state_loss
 
@@ -488,6 +551,7 @@ class GraphConvolutionalModel(nn.Module):
                         reward=r,
                         reward_norm=torch.norm(r),
                         rel_reward_loss=rel_reward_loss)
+
 
         d = d.float()
         done_loss = self.BCE(done_pred, d)

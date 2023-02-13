@@ -34,8 +34,9 @@ python main_DPPO.py
 命令行参数：
 
 - `--debug`：开启debug模式，快速验证代码全流程无bug，将实验结果存入`runs/debug`路径
-- `--group foo`: 将实验结果存入`runs/foo`路径
+- `--group foo`： 将实验结果存入`runs/foo`路径
 - `--algo foo`：选择使用算法foo
+- `--n_thread n`：设置多线程环境数为n，加速训练
 
 更多命令行参数的使用方式参见代码。
 

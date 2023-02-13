@@ -10,7 +10,7 @@ import os
 from numpy.core.numeric import indices
 from torch.distributions.normal import Normal
 from algorithms.utils import collect, mem_report
-from algorithms.models import GaussianActor, GraphConvolutionalModel, MLP, CategoricalActor
+from algorithms.models import GaussianActor, GraphConvolutionalModel, MLP, CategoricalActor, YyxMLPModel
 from tqdm.std import trange
 # from algorithms.algorithm import ReplayBuffer
 
@@ -35,13 +35,19 @@ from algorithms.algo.buffer import MultiCollect, Trajectory, TrajectoryBuffer, M
 class ModelBasedAgent(nn.ModuleList):
     def __init__(self, logger, device, agent_args, input_args, **kwargs):
         super().__init__(logger, device, agent_args, input_args, **kwargs)
+        self.input_args = input_args
         self.logger = logger
         self.device = device
         self.lr_p = agent_args.lr_p
         self.p_args = agent_args.p_args
 
-        # yyx: ps是learned model的网络结构
-        self.ps = GraphConvolutionalModel(self.logger, self.adj, self.observation_dim, self.action_dim, self.n_agent, self.p_args).to(self.device)
+        if self.input_args.use_mlp_model:
+            self.ps = YyxMLPModel(self.logger, self.observation_dim,
+                                  self.p_args, multi_mlp=input_args.multi_mlp).to(self.device)
+        else:
+            self.ps = GraphConvolutionalModel(self.logger, self.adj, self.observation_dim, self.action_dim, self.n_agent, self.p_args).to(self.device)
+
+        # 2.12凌晨做的mlp-model实验，根本没优化model！
         self.optimizer_p = Adam(self.ps.parameters(), lr=self.lr)
 
     def updateModel(self, trajs, length=1):
@@ -63,8 +69,10 @@ class ModelBasedAgent(nn.ModuleList):
             ds.append(d)
 
         ss, actions, rs, s1s, ds = [torch.stack(item, dim=0) for item in [ss, actions, rs, s1s, ds]]
-        loss, rel_state_error = self.ps.train(ss, actions, rs, s1s, ds, length)  # [n_traj, T, n_agent, dim]
-
+        if self.input_args.use_mlp_model:
+            loss, rel_state_error = self.ps.train(ss, actions, rs, s1s, length)  # [n_traj, T, n_agent, dim]
+        else:
+            loss, rel_state_error = self.ps.train(ss, actions, rs, s1s, ds, length)  # [n_traj, T, n_agent, dim]
         self.optimizer_p.zero_grad()
         loss.sum().backward()
         # torch.nn.utils.clip_grad_norm_(parameters=self.ps.parameters(), max_norm=5, norm_type=2)
@@ -87,7 +95,10 @@ class ModelBasedAgent(nn.ModuleList):
                 s1s.append(s1)
                 ds.append(d)
             ss, actions, rs, s1s, ds = [torch.stack(item, dim=0) for item in [ss, actions, rs, s1s, ds]]
-            _, rel_state_error = self.ps.train(ss, actions, rs, s1s, ds, length)  # [n_traj, T, n_agent, dim]
+            if self.input_args.use_mlp_model:
+                _, rel_state_error = self.ps.train(ss, actions, rs, s1s, length)
+            else:
+                _, rel_state_error = self.ps.train(ss, actions, rs, s1s, ds, length)  # [n_traj, T, n_agent, dim]
             return rel_state_error.item()
 
     def model_step(self, s, a):
@@ -106,10 +117,12 @@ class ModelBasedAgent(nn.ModuleList):
                 a = a.unsqueeze(-1)
             s = s.to(self.device)
             a = a.to(self.device)
-            # ---------------------------------------------------------------------------------
-            # rs, s1s, ds = self.ps.predict(s, (0.2*a).tanh())     # for UAV
-            # ---------------------------------------------------------------------------------
-            rs, s1s, ds = self.ps.predict(s, a)
+            if self.input_args.use_mlp_model:
+                rs, s1s = self.ps(s, a)
+                ds = torch.full((rs.shape), False)  # MLP不预测done，先硬编码为False
+            else:
+                rs, s1s, ds = self.ps.predict(s, a)
+
             return rs.detach(), s1s.detach(), ds.detach(), s.detach()
 
     def load_model(self, pretrained_model):
@@ -119,58 +132,13 @@ class ModelBasedAgent(nn.ModuleList):
         self.load_state_dict(dic[''])
 
 
-class HiddenAgent(ModelBasedAgent):
-    def __init__(self, logger, device, agent_args, **kwargs):
-        super().__init__(logger, device, agent_args, **kwargs)
-        self.hidden_state_dim = agent_args.hidden_state_dim
-        self.embedding_sizes = agent_args.embedding_sizes  # 来自Mobile_DMPO.py这一参数文件
-        self.embedding_layers = self._init_embedding_layers()
-        self.optimizer_p.add_param_group({'params': self.embedding_layers.parameters()})
-
-    def act(self, s, requires_log=False):  # TODO 这里要适配向量环境 s.shape前增加n_threads维度
-        s = s.detach()
-        if s.size()[-1] != self.hidden_state_dim:
-            s = self._state_embedding(s).detach()
-        return super().act(s, requires_log)
-
-    def get_logp(self, s, a):
-        s = s.detach()
-        if s.size()[-1] != self.hidden_state_dim:
-            s = self._state_embedding(s).detach()
-        return super().get_logp(s, a)
-
-    def updateModel(self, s, a, r, s1, d):
-        if s.size()[-1] != self.hidden_state_dim:
-            s = self._state_embedding(s)
-        if s1.size()[-1] != self.hidden_state_dim:
-            s1 = self._state_embedding(s1)
-        return super().updateModel(s, a, r, s1, d)
-
-    def model_step(self, s, a):
-        if s.size()[-1] != self.hidden_state_dim:
-            s = self._state_embedding(s)
-        return super().model_step(s, a)
-
-    def _init_embedding_layers(self):
-        embedding_layers = nn.ModuleList()
-        for _ in range(self.n_agent):
-            embedding_layers.append(MLP(self.embedding_sizes, activation=nn.ReLU))
-        return embedding_layers.to(self.device)
-
-    def _state_embedding(self, s):
-        embeddings = []
-        for i in range(self.n_agent):
-            embeddings.append(self.embedding_layers[i](s.select(dim=-2, index=i).to(self.device)))
-        embeddings = torch.stack(embeddings, dim=-2)
-        return embeddings
-
-
 # yyx wow, 继承自两个父类，有的学习了
 class DMPOAgent(ModelBasedAgent, DPPOAgent):
     def __init__(self, logger, device, agent_args, input_args, **kwargs):
         super().__init__(logger, device, agent_args, input_args, **kwargs)
 
     def checkConverged(self, ls_info):
+        # DMPO的这个函数只有意义的，跟DPPO不一样~
         rs = [info[0] for info in ls_info]
         r_converged = len(rs) > 8 and np.mean(rs[-3:]) < np.mean(rs[:-5])
         entropies = [info[1] for info in ls_info]
@@ -183,19 +151,3 @@ class DMPOAgent(ModelBasedAgent, DPPOAgent):
         return kl_exceeded or r_converged and entropy_converged
 
 
-# yyx 这个类没有被读！
-class MB_DPPOAgent_Hidden(HiddenAgent, DMPOAgent):
-    def __init__(self, logger, device, agent_args, **kwargs):
-        super().__init__(logger, device, agent_args, **kwargs)
-
-    def checkConverged(self, ls_info):
-        rs = [info[0] for info in ls_info]
-        r_converged = len(rs) > 8 and np.mean(rs[-3:]) < np.mean(rs[:-5])
-        entropies = [info[1] for info in ls_info]
-        entropy_converged = len(entropies) > 8 and np.abs(np.mean(entropies[-3:]) / np.mean(entropies[:-5]) - 1) < 1e-2
-        kls = [info[2] for info in ls_info]
-        kl_exceeded = False
-        if self.target_kl is not None:
-            kls = [kl > 1.5 * self.target_kl for kl in kls]
-            kl_exceeded = any(kls)
-        return kl_exceeded or r_converged and entropy_converged

@@ -260,7 +260,7 @@ class GuardSubprocVecEnv(ShareVecEnv):
 
 
 class SubprocVecEnv(ShareVecEnv):
-    '''TODO jsac会用到'''
+    '''jsac会用到'''
     def __init__(self, env_fns, spaces=None):
         """
         envs: list of gym environments to run in subprocesses

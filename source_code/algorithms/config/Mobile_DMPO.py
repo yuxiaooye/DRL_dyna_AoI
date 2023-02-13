@@ -29,8 +29,7 @@ def getArgs(radius_p, radius_v, radius_pi, env):
     alg_args.model_prob = 0.5
     alg_args.model_batch_size = 512
     alg_args.model_buffer_size = 15
-    alg_args.model_update_length = 4  # TODO 这是一个关键参数，和main.py中的T有关
-    alg_args.model_length_schedule = None
+    alg_args.model_update_length = 4  # 这是一个关键参数，和main.py中的T有关
 
     agent_args = Config()
     tmp_neighbor_mask = np.array(
@@ -63,7 +62,7 @@ def getArgs(radius_p, radius_v, radius_pi, env):
     # agent_args.observation_space = env.observation_space
     agent_args.hidden_state_dim = 8
     agent_args.observation_dim = env.observation_space['Box'].shape[1]  # 标量1715，意为每个agent的obs的向量维度
-    agent_args.embedding_sizes = [env.observation_space['Box'].shape[1], 16, agent_args.hidden_state_dim]  # TODO 这个embedding_sizes在DPPO的参数中没有 看下是什么~~
+    agent_args.embedding_sizes = [env.observation_space['Box'].shape[1], 16, agent_args.hidden_state_dim]  # 这个embedding_sizes在DPPO的参数中没有 看下是什么~~
     agent_args.action_space = env.action_space
     agent_args.radius_v = radius_v
     agent_args.radius_pi = radius_pi

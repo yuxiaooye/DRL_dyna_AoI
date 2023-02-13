@@ -12,6 +12,6 @@ class YyxAgentBase():
         if not os.path.exists(dir_name + '/Models'):
             os.mkdir(dir_name + '/Models')
         prefix = 'best' if is_newbest else str(episode)
-        # TODO only save actors now
+        # caution: only save actors now
         torch.save(self.actors.state_dict(), dir_name + '/Models/' + prefix + '_actor.pt')
         print('RL saved successfully')
