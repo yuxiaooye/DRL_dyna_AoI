@@ -29,7 +29,6 @@ def getArgs(radius_p, radius_v, radius_pi, env):
     alg_args.model_batch_size = 256
     alg_args.model_buffer_size = 15
     alg_args.model_update_length = 2
-    alg_args.model_length_schedule = lambda x: min(25, 8 + int(x/4))
 
     agent_args = Config()
     tmp_neighbor_mask = np.array(

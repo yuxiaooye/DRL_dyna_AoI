@@ -51,12 +51,6 @@ class Roadmap():
         return poi_mat  # shape = (33, 121, 2) 意为33个poi在121个时间步的坐标信息
 
     def lonlat2pygamexy(self, lon, lat):
-        '''
-        pygamexy.
-        yx
-        np.array
-        '''
-
         x = - self.max_dis_x * (lat - self.upper_right[1]) / (self.upper_right[1] - self.lower_left[1])
         y = self.max_dis_y * (lon - self.lower_left[0]) / (self.upper_right[0] - self.lower_left[0])
         return x, y

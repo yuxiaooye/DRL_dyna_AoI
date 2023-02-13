@@ -39,7 +39,6 @@ class EnvMobile():
         self.EPSILON = self.config("epsilon")
         self.ACTION_ROOT = self.config("action_root")
         self.MAX_EPISODE_STEP = self.config("max_episode_step")
-        self.max_episode_steps = self.MAX_EPISODE_STEP
         self.TIME_SLOT = self.config("time_slot")
         self.TOTAL_TIME = self.MAX_EPISODE_STEP * self.TIME_SLOT
         self.UAV_SPEED = self.config("uav_speed")
@@ -79,14 +78,18 @@ class EnvMobile():
         data_file_dir = f'envs/{self.input_args.dataset}'
         self.debug_index = self.poi_mat[:,0,:].sum(axis=-1).argmin()  # tmp
         # == OK 对读的这几个列表进行裁剪，时间步240->121，poi数244->33 ==
-        self.poi_arrival = np.load(os.path.join(data_file_dir, 'arrival.npy'))[:self.POI_NUM, :self.max_episode_steps + 1]  # shape = (33, 121)，其中33是poi数，121是episode的时间步数
+        self.poi_arrival = np.load(os.path.join(data_file_dir, 'arrival.npy'))[:self.POI_NUM, :self.MAX_EPISODE_STEP + 1]  # shape = (33, 121)，其中33是poi数，121是episode的时间步数
         # 权重在计算reward和metric时用到，先简化问题 不用权重
         self.poi_weight = np.load(os.path.join(data_file_dir, 'poi_weights.npy'))[:self.POI_NUM]
-        self.poi_QoS = np.load(os.path.join(data_file_dir, f'poi_QoS{self.input_args.dyna_level}.npy'))
+        self.poi_QoS = np.load(os.path.join(data_file_dir, f'QoS{self.MAX_EPISODE_STEP}/poi_QoS{self.input_args.dyna_level}.npy'))
         assert self.poi_QoS.shape == (self.POI_NUM, self.MAX_EPISODE_STEP)
         ''''''
 
-        self.poi_property_num = 2 + self.UPDATE_USER_NUM + 1 + 1
+        self.QoS_MAX, self.QoS_MIN = self.poi_QoS.max(), self.poi_QoS.min()
+
+        # 位置2 + 剩余包数1 + 距离上次收集过了多久1 + 最早三个包的到达时间1 + SNR信息1
+        SNR_prop_num = 1
+        self.poi_property_num = 2 + 1 + 1 + self.UPDATE_USER_NUM + SNR_prop_num
         info = self.get_env_info()
 
         obs_dict = {
@@ -99,8 +102,6 @@ class EnvMobile():
         self.obs = None
         self.stacked_obs = None
         self.reset()
-
-
 
 
     def reset(self):
@@ -270,7 +271,7 @@ class EnvMobile():
 
             # self._plot_histograms(self.debug_all_r)
             # self._plot_aoi_trend(self.debug_index)
-            self.save_trajs()
+            # self.save_trajs()
 
         self.get_obs()
         return self.get_obs_from_outside(), uav_reward, done, info
@@ -513,7 +514,7 @@ class EnvMobile():
         return data_rate / 1e6
 
     def get_obs_from_outside(self):  # yyx add
-        if self.input_args.debug_use_stack_frame:
+        if self.input_args.use_stack_frame:
             return torch.concat(self.stacked_obs, dim=-1)  # shape = (3, obs_dim*4)
         else:
             return self.obs  # shape = (3, obs_dim)
@@ -534,12 +535,7 @@ class EnvMobile():
 
         return obs_dict
 
-    def get_obs_agent(self, agent_id, global_view=False):
-        if global_view:  # False
-            distance_limit = 1e10
-        else:
-            distance_limit = self.agent_field
-
+    def get_obs_agent(self, agent_id):
         poi_position_all = self.poi_position
         poi_value_all = self.poi_value
 
@@ -549,7 +545,7 @@ class EnvMobile():
             if i == agent_id:
                 obs.append(self.uav_position[i][0] / self.MAP_X)  # 送入obs时对位置信息进行归一化
                 obs.append(self.uav_position[i][1] / self.MAP_Y)
-            elif self._cal_distance(self.uav_position[agent_id], self.uav_position[i]) < distance_limit:
+            elif self._cal_distance(self.uav_position[agent_id], self.uav_position[i]) < self.agent_field:
                 obs.append(self.uav_position[i][0] / self.MAP_X)
                 obs.append(self.uav_position[i][1] / self.MAP_Y)
             else:  # 看不到观测范围外的uav
@@ -557,8 +553,8 @@ class EnvMobile():
 
         for poi_index, (poi_position, poi_value) in enumerate(zip(poi_position_all, poi_value_all)):
             d = self._cal_distance(poi_position, self.uav_position[agent_id])
-            if not d < distance_limit:  # user不在观测范围内
-                for _ in range(self.poi_property_num):  # 7
+            if not d < self.agent_field:  # user不在观测范围内
+                for _ in range(self.poi_property_num):  # 8
                     obs.append(0)
             else:  # user在观测范围内
                 '''user的位置和队列剩余包数'''
@@ -585,6 +581,12 @@ class EnvMobile():
                 if len(delta_list) < self.UPDATE_USER_NUM:  # 用0补齐delta_list到长度为3，最多就记录三个信息了
                     delta_list += [0 for _ in range(self.UPDATE_USER_NUM - len(delta_list))]
                 obs.extend(delta_list)
+
+                '''下次数据收集时的SNR阈值'''
+                snr = self.poi_QoS[poi_index][min(self.step_count, self.MAX_EPISODE_STEP-1)]  # 防止越界，越界的时候是终止状态，也没被agent读~
+                snr_obs = (snr - self.QoS_MIN) / self.QoS_MIN  # 映射到(0, 1)
+                obs.append(snr_obs)
+
 
             '''添加未来的信息供当前时刻的agent决策'''
             def check_future_arrival(poi_index, t):
@@ -646,7 +648,7 @@ class EnvMobile():
         env_info = {"obs_shape": self.get_obs_size(),
                     "n_actions": self.get_total_actions(),
                     "n_agents": self.n_agents,
-                    "max_episode_steps": self.max_episode_steps}
+                    "MAX_EPISODE_STEP": self.MAX_EPISODE_STEP}
         return env_info
 
     def check_arrival(self, step):  # arrival指数据生成
@@ -671,20 +673,6 @@ class EnvMobile():
     def _plot_histograms(self, data):
         plt.hist(data, bins=20, rwidth=0.8)
         plt.show()
-
-    def save_trajs(self, total_steps=1, is_newbest=False):
-        '''魔改自icde dummy_env的callback
-        save trajs as .npz file, shape should be (33, 121, 2)，其中33是POI_NUM， 121是时间步数
-        '''
-        postfix = 'best' if is_newbest else str(total_steps)  # 现在total_steps其实恒为1，不过记录训练过程的轨迹也意义不大，先只记录best轨迹吧~
-        save_traj_dir = osp.join(self.input_args.output_dir, f'{self.phase}_saved_trajs')
-        if not osp.exists(save_traj_dir): os.makedirs(save_traj_dir)
-        np.savez(osp.join(save_traj_dir, f'eps_{postfix}.npz'), np.array(self.uav_trace))
-
-        if is_newbest and self.phase == 'train':  # OK 暂时只画训练时的最优轨迹
-            from tools.post.vis import render_HTML
-            render_HTML(self.input_args.output_dir)
-            print('call vis.gif along with the training')
 
     def save_trajs_2(self, best_trajs, total_steps=1,
                      phase='train', is_newbest=False):

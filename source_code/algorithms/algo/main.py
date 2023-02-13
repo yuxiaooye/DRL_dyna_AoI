@@ -58,7 +58,7 @@ class OnPolicyRunner:
         self.test_interval = alg_args.test_interval
         self.rollout_length = alg_args.rollout_length
         self.test_length = alg_args.test_length
-        self.debug_use_stack_frame = alg_args.debug_use_stack_frame
+        self.use_stack_frame = alg_args.use_stack_frame
 
         # environment initialization
         self.envs_learn = envs_learn

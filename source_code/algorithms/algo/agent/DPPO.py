@@ -63,7 +63,7 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
         self.algo_name = input_args.algo
         self.advantage_norm = agent_args.advantage_norm
         self.observation_dim = agent_args.observation_dim
-        if input_args.debug_use_stack_frame:
+        if input_args.use_stack_frame:
             self.observation_dim *= 4
         self.action_space = agent_args.action_space
 

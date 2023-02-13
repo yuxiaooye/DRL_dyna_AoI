@@ -91,8 +91,8 @@ def override(alg_args, run_args, input_args):
     timenow = datetime.strftime(datetime.now(), "%Y-%m-%d_%H-%M-%S")
     run_args.name = '{}_{}'.format(timenow, agent_fn.__name__)
 
-
     # tune env
+    ## setting
     if input_args.snr != 200:
         run_args.name += f'_SNR={input_args.snr}'
     if input_args.dyna_level != '2':
@@ -103,16 +103,16 @@ def override(alg_args, run_args, input_args):
         run_args.name += f'_DataAmount={input_args.user_data_amount}'
     if input_args.update_num != 10:
         run_args.name += f'_UpdateNum={input_args.update_num}'
-    if input_args.future_obs != 0:
-        run_args.name += f'_FutureObs={input_args.future_obs}'
     if input_args.use_fixed_range:
         run_args.name += f'_FixedRange'
-    if not input_args.use_extended_value:
-        run_args.name += f'_NotUseExtendedValue'
-    if input_args.use_mlp_model:
-        run_args.name += f'_MLPModel'
-    if input_args.multi_mlp:
-        run_args.name += f'_MultiMLP'
+    if input_args.uav_num != 3:
+        run_args.name += f'_UAVNum={input_args.uav_num}'
+    ## MDP
+    if input_args.max_episode_step != 120:
+        run_args.name += f'_MaxTs={input_args.max_episode_step}'
+    if input_args.future_obs != 0:
+        run_args.name += f'_FutureObs={input_args.future_obs}'
+
 
     # tune algo
     if input_args.lr is not None:
@@ -121,14 +121,20 @@ def override(alg_args, run_args, input_args):
     if input_args.lr_v is not None:
         run_args.name += f'_LR-V={input_args.lr_v}'
         alg_args.agent_args.lr_v = input_args.lr_v
-    if input_args.debug_use_stack_frame:
+    if input_args.use_stack_frame:
         run_args.name += f'_UseStackFrame'
+    if not input_args.use_extended_value:
+        run_args.name += f'_NotUseExtendedValue'
+    if input_args.use_mlp_model:
+        run_args.name += f'_MLPModel'
+    if input_args.multi_mlp:
+        run_args.name += f'_MultiMLP'
     final = '../{}/{}'.format(input_args.output_dir, run_args.name)
     run_args.output_dir = final
     input_args.output_dir = final
-    
+
     alg_args.algo = input_args.algo
-    alg_args.debug_use_stack_frame = input_args.debug_use_stack_frame
+    alg_args.use_stack_frame = input_args.use_stack_frame
 
     return alg_args, run_args, input_args
 
@@ -150,21 +156,25 @@ def parse_args():
     parser.add_argument('--mute_wandb', default=False, action='store_true')
     # tune agent
     parser.add_argument('--init_checkpoint', type=str)  # load pretrained model
-    parser.add_argument('--n_thread', type=int, default=2)
+    parser.add_argument('--n_thread', type=int, default=8)
     # tune algo
     parser.add_argument('--lr', type=float)
     parser.add_argument('--lr_v', type=float)
-    parser.add_argument('--debug_use_stack_frame', action='store_true')
+    parser.add_argument('--use-stack-frame', action='store_true')
     parser.add_argument('--use-extended-value', action='store_false', help='反逻辑，仅用于DPPO')
     parser.add_argument('--use-mlp-model', action='store_true', help='将model改为最简单的mlp，仅用于DMPO')
     parser.add_argument('--multi-mlp', action='store_true', help='在model中分开预测obs中不同类别的信息，仅用于DMPO')
     # tune env
-    parser.add_argument('--use_fixed_range', action='store_true')
+    ## setting
+    parser.add_argument('--use-fixed-range', action='store_true')
     parser.add_argument('--snr', type=float, default=200)
-    parser.add_argument('--init_energy', type=float, default=719280)
     parser.add_argument('--dyna_level', type=str, default='2', help='指明读取不同难度的poi_QoS.npy')
+    parser.add_argument('--init_energy', type=float, default=719280)
     parser.add_argument('--user_data_amount', type=int, default=1)
     parser.add_argument('--update_num', type=int, default=10)
+    parser.add_argument('--uav_num', type=int, default=3)
+    ## MDP
+    parser.add_argument('--max_episode_step', type=int, default=120)
     parser.add_argument('--future_obs', type=int, default=0)
     args = parser.parse_args()
 
@@ -207,12 +217,13 @@ env_fn_train, env_fn_test = EnvMobile, EnvMobile
 
 env_args = {  # 这里环境类的参数抄昊宝
     "action_mode": 3,
-    "render_mode": True,
     "emergency_threshold": 100,
+    "max_episode_step": input_args.max_episode_step,
     "collect_range": input_args.snr,
     "initial_energy": input_args.init_energy,
     "user_data_amount": input_args.user_data_amount,
     "update_num": input_args.update_num,
+    "uav_num": input_args.uav_num,
 }
 
 run_args = getRunArgs(input_args)

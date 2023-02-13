@@ -33,7 +33,7 @@ def render_HTML(output_dir, tag='train', traj_filename='eps_best.npz'):
     poi_num = env_config['poi_num']
     num_timestep = env_config['max_episode_step']
     dataset = input_args['dataset']
-    poi_QoS = np.load(os.path.join(f'envs/{dataset}', f"poi_QoS{input_args['dyna_level']}.npy"))
+    poi_QoS = np.load(os.path.join(f'envs/{dataset}', f"QoS{num_timestep}/poi_QoS{input_args['dyna_level']}.npy"))
     assert poi_QoS.shape == (poi_num, num_timestep)
     rm = Roadmap(dataset, env_config)
 
