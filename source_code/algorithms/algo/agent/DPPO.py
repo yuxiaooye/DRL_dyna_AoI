@@ -82,6 +82,7 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
         if self.input_args.algo == 'G2ANet':  # 魔改
             return self.g2a_embed_net(s)
 
+
         assert net in ('pi', 'v')
         if self.use_extended_value:
             s = self.collect_pi.gather(s) if net == 'pi' else self.collect_v.gather(s)
