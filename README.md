@@ -24,6 +24,15 @@
 
 conda环境为yyx_adept(10.1.114.77)，yyx_ishen(10.1.114.75)。依赖项不多，哪个包缺了手动pip即可。
 
+Docker部署（Optional）
+```sh
+docker build -t linc/mcs:drl_dyna_aoi-v1 . --network host
+
+xhost +
+
+docker run -it --privileged --net=host --ipc=host --device=/dev/dri:/dev/dri -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=$DISPLAY --gpus all --name test_mcs linc/mcs:drl_dyna_aoi-v1 /bin/bash
+```
+
 启动训练：
 
 ```sh
