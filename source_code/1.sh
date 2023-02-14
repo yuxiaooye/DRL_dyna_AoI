@@ -1,7 +1,7 @@
 # !/bin/sh
 source activate yyx_ishen
-group='extendV-ablation-0214'
+group='g2anet-0214'
 nohup_dir='../nohup_log'
 mkdir -p ${nohup_dir}
-nohup python -u main_DPPO.py --group ${group} --device cuda:6 >> ${nohup_dir}/0214.log 2>&1 &
-nohup python -u main_DPPO.py --group ${group} --use-extended-value --device cuda:6 >> ${nohup_dir}/0214.log 2>&1 &
+nohup python -u main_DPPO.py --group ${group} --dyna_level 4 --update_num 5 --user_data_amount 5 --device cuda:4 >> ${nohup_dir}/0214.log 2>&1 &
+nohup python -u main_DPPO.py --group ${group} --algo G2ANet --dyna_level 4 --update_num 5 --user_data_amount 5 --device cuda:4 >> ${nohup_dir}/0214.log 2>&1 &

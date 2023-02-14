@@ -44,7 +44,7 @@ def getRunArgs(input_args):
 
 
 def getAlgArgs(run_args, input_args, env):
-    assert input_args.env in ['mobile'] and input_args.algo in ['DPPO', 'CPPO', 'DMPO', 'IC3Net', 'IA2C']
+    assert input_args.env in ['mobile'] and input_args.algo in ['DPPO', 'CPPO', 'DMPO', 'IC3Net', 'IA2C', 'G2ANet']
     env_str = input_args.env[0].upper() + input_args.env[1:]
     config = importlib.import_module(f"algorithms.config.{env_str}_{input_args.algo}")
     # 在这里，得到了alg_args.agent_args.action_space
@@ -161,7 +161,6 @@ def parse_args():
     parser.add_argument('--use-extended-value', action='store_false', help='反逻辑，仅用于DPPO')
     parser.add_argument('--use-mlp-model', action='store_true', help='将model改为最简单的mlp，仅用于DMPO')
     parser.add_argument('--multi-mlp', action='store_true', help='在model中分开预测obs中不同类别的信息，仅用于DMPO')
-    parser.add_argument('--use_g2a_net', action='store_true', help='contribution')
     # tune env
     ## setting
     parser.add_argument('--use-fixed-range', action='store_true')
@@ -208,6 +207,8 @@ elif input_args.algo == 'CPPO':
     from algorithms.algo.agent.CPPO import CPPOAgent as agent_fn
 elif input_args.algo == 'DMPO':
     from algorithms.algo.agent.DMPO import DMPOAgent as agent_fn
+elif input_args.algo == 'G2ANet':
+    from algorithms.algo.agent.yyx_G2ANetAgent import G2ANetAgent as agent_fn
 
 from envs.env_mobile import EnvMobile
 env_fn_train, env_fn_test = EnvMobile, EnvMobile

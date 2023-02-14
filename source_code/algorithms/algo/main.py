@@ -176,7 +176,7 @@ class OnPolicyRunner:
         envs = self.envs_learn
         for t in range(int(self.rollout_length/self.input_args.n_thread)):  # 加入向量环境后，控制总训练步数不变
             s = envs.get_obs_from_outside()
-            dist = self.agent.act(s)
+            dist = self.agent.act(s)  # TODO rollout时还是有问题
             a = dist.sample()
             logp = dist.log_prob(a)
             # if len(a.shape) == 2 and a.shape[0] == 1:  # for IA2C and IC3Net  # TODO 向量环境下要改~ a.shape[0]已经不是IA2C和IC3Net会额外添加的batch的维度了，我猜需要维度从0改成1

@@ -34,20 +34,11 @@ from algorithms.algo.buffer import MultiCollect, Trajectory, TrajectoryBuffer, M
 class DPPOAgent(nn.ModuleList, YyxAgentBase):
     """Everything in and out is torch Tensor."""
 
-    def __init__(self, logger, device, agent_args, input_args, **kwargs):
+    def __init__(self, logger, device, agent_args, input_args):
         super().__init__()
         self.act_dim = 9  # 硬编码
-
+        self.input_args = input_args
         self.use_extended_value = input_args.use_extended_value
-        self.use_g2a_net = input_args.use_g2a_net
-        if self.use_g2a_net:
-            assert self.use_extended_value == True
-            from algorithms.algo.G2ANet import G2ANet
-            self.g2anet = G2ANet(obs_dim=agent_args.observation_dim,
-                                 n_actions=self.act_dim,
-                                 n_agent=agent_args.n_agent,
-                                 device=device,
-                                 )
 
         self.logger = logger  # LogClient类对象
         self.device = device
@@ -80,13 +71,17 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
         self.radius_pi = agent_args.radius_pi
         self.pi_args = agent_args.pi_args
         self.v_args = agent_args.v_args
-        self.collect_pi, self.actors = self._init_actors()  # collect_pi和collect_v应该一样吧？
-        self.collect_v, self.vs = self._init_vs()
 
-        self.optimizer_v = Adam(self.vs.parameters(), lr=self.lr_v)
-        self.optimizer_pi = Adam(self.actors.parameters(), lr=self.lr)
+        if not input_args.algo == 'G2ANet':
+            self.collect_pi, self.actors = self._init_actors()  # collect_pi和collect_v应该一样吧？
+            self.collect_v, self.vs = self._init_vs()
+            self.optimizer_v = Adam(self.vs.parameters(), lr=self.lr_v)
+            self.optimizer_pi = Adam(self.actors.parameters(), lr=self.lr)
 
     def get_networked_s(self, s, net):
+        if self.input_args.algo == 'G2ANet':  # 魔改
+            return self.g2a_embed_net(s)
+
         assert net in ('pi', 'v')
         if self.use_extended_value:
             s = self.collect_pi.gather(s) if net == 'pi' else self.collect_v.gather(s)
@@ -95,6 +90,11 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
             assert n == self.n_agent
             s = [s[:, i, :] for i in range(n)]
         return s
+
+    def s_for_agent(self, s, i):
+        if self.input_args.algo == 'G2ANet':
+            return s[:, i, :]
+        return s[i]
 
     def act(self, s):
         """
@@ -111,7 +111,7 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
             # Now s[i].dim() == ([-1, dim]) 注意不同agent的dim不同，由它的邻居数量决定
             probs = []
             for i in range(self.n_agent):
-                probs.append(self.actors[i](s[i]))
+                probs.append(self.actors[i](self.s_for_agent(s, i)))
             probs = torch.stack(probs, dim=1)  # shape = (-1, NUM_AGENT, act_dim)
             return Categorical(probs)
 
@@ -132,7 +132,7 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
         # Now s[i].dim() == 2, a.dim() == 3
         log_prob = []
         for i in range(self.n_agent):
-            probs = self.actors[i](s[i])
+            probs = self.actors[i](self.s_for_agent(s, i))
             log_prob.append(torch.log(torch.gather(probs, dim=-1, index=torch.select(a, dim=1, index=i).long())))
         log_prob = torch.stack(log_prob, dim=1)
         while log_prob.dim() < 3:
@@ -149,7 +149,7 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
         s = self.get_networked_s(s, net='v')
         values = []
         for i in range(self.n_agent):
-            values.append(self.vs[i](s[i]))
+            values.append(self.vs[i](self.s_for_agent(s, i)))
         # 填充后，values是有n_agent个元素的列表 元素.shape = (-1, 1)
         # 得到的是V_j(s_{N_j}) 也即式(6)
         return torch.stack(values, dim=1)
@@ -277,8 +277,8 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
         b, T, n, dim_s = s.shape
         s, a, r, s1, d, logp = [item.to(self.device) for item in [s, a, r, s1, d, logp]]
         # 过网络前先merge前两个维度，过网络后再复原
+        # TODO NEXT value最后一维的维度居然是9
         value = self._evalV(s.view(-1, n, dim_s)).view(b, T, n, -1)  # 在_evalV中实现了具体的扩展值函数逻辑
-
         returns = torch.zeros(value.size(), device=self.device)
         deltas, advantages = torch.zeros_like(returns), torch.zeros_like(returns)
         prev_value = self._evalV(s1.select(1, T - 1))
@@ -299,8 +299,14 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
             prev_return = returns.select(1, t)
             prev_value = value.select(1, t)
             prev_advantage = advantages.select(1, t)
-        reduced_advantages = self.collect_v.reduce_sum(advantages.view(-1, n, 1)).view(advantages.size())
-        if self.advantage_norm and reduced_advantages.size()[1] > 1:
-            reduced_advantages = (reduced_advantages - reduced_advantages.mean(dim=1, keepdim=True)) / (reduced_advantages.std(dim=1, keepdim=True) + 1e-5)
+        if self.advantage_norm:
             advantages = (advantages - advantages.mean(dim=1, keepdim=True)) / (advantages.std(dim=1, keepdim=True) + 1e-5)
-        return value.detach(), returns, advantages.detach(), reduced_advantages.detach()
+        if self.input_args.algo == 'G2ANet':  # 用G2A时，没必要用reduced_adv，也即邻域的adv的均值
+            return value.detach(), returns, advantages.detach(), None
+        else:
+            reduced_advantages = self.collect_v.reduce_sum(advantages.view(-1, n, 1)).view(advantages.size())
+            if reduced_advantages.size()[1] > 1:
+                reduced_advantages = (reduced_advantages - reduced_advantages.mean(dim=1, keepdim=True)) / (reduced_advantages.std(dim=1, keepdim=True) + 1e-5)
+            return value.detach(), returns, advantages.detach(), reduced_advantages.detach()
+
+
