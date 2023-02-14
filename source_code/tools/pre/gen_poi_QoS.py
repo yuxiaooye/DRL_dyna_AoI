@@ -39,7 +39,7 @@ def gen(POI_NUM, T):
 
 
 POI_NUM = 33
-T = 240
+T = 120
 # 将结果存入外存
 save_dir = f'envs/NCSU/QoS{T}/poi_QoS{args.dyna_level}.npy'
 np.save(save_dir, gen(POI_NUM, T))

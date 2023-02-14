@@ -36,10 +36,18 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
 
     def __init__(self, logger, device, agent_args, input_args, **kwargs):
         super().__init__()
-        self.action_dim = 9  # 硬编码
-        self.action_shape = self.action_dim
+        self.act_dim = 9  # 硬编码
 
         self.use_extended_value = input_args.use_extended_value
+        self.use_g2a_net = input_args.use_g2a_net
+        if self.use_g2a_net:
+            assert self.use_extended_value == True
+            from algorithms.algo.G2ANet import G2ANet
+            self.g2anet = G2ANet(obs_dim=agent_args.observation_dim,
+                                 n_actions=self.act_dim,
+                                 n_agent=agent_args.n_agent,
+                                 device=device,
+                                 )
 
         self.logger = logger  # LogClient类对象
         self.device = device
@@ -72,11 +80,21 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
         self.radius_pi = agent_args.radius_pi
         self.pi_args = agent_args.pi_args
         self.v_args = agent_args.v_args
-        self.collect_pi, self.actors = self._init_actors()
+        self.collect_pi, self.actors = self._init_actors()  # collect_pi和collect_v应该一样吧？
         self.collect_v, self.vs = self._init_vs()
 
         self.optimizer_v = Adam(self.vs.parameters(), lr=self.lr_v)
         self.optimizer_pi = Adam(self.actors.parameters(), lr=self.lr)
+
+    def get_networked_s(self, s, net):
+        assert net in ('pi', 'v')
+        if self.use_extended_value:
+            s = self.collect_pi.gather(s) if net == 'pi' else self.collect_v.gather(s)
+        else:
+            n = s.shape[1]
+            assert n == self.n_agent
+            s = [s[:, i, :] for i in range(n)]
+        return s
 
     def act(self, s):
         """
@@ -87,21 +105,15 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
         Returns a distribution with the same dimensions of input.
         """
         with torch.no_grad():
-            dim = s.dim()
             assert s.dim() == 3
-            # while s.dim() <= 2:
-            #     s = s.unsqueeze(0)
             s = s.to(self.device)
-            s = self.collect_pi.gather(s)
+            s = self.get_networked_s(s, net='pi')
             # Now s[i].dim() == ([-1, dim]) 注意不同agent的dim不同，由它的邻居数量决定
             probs = []
             for i in range(self.n_agent):
                 probs.append(self.actors[i](s[i]))
             probs = torch.stack(probs, dim=1)  # shape = (-1, NUM_AGENT, act_dim)
-            # while probs.dim() > dim:
-            #     probs = probs.squeeze(0)
             return Categorical(probs)
-
 
     def get_logp(self, s, a):
         """
@@ -109,7 +121,6 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
         Returns a tensor whose dim() == 3.
         """
         s = torch.as_tensor(s, dtype=torch.float32, device=self.device)
-        dim = s.dim()
 
         while s.dim() <= 2:
             s = s.unsqueeze(0)
@@ -117,7 +128,7 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
         while a.dim() < s.dim():
             a = a.unsqueeze(-1)
 
-        s = self.collect_pi.gather(s)
+        s = self.get_networked_s(s, net='pi')
         # Now s[i].dim() == 2, a.dim() == 3
         log_prob = []
         for i in range(self.n_agent):
@@ -127,6 +138,21 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
         while log_prob.dim() < 3:
             log_prob = log_prob.unsqueeze(-1)
         return log_prob
+
+    def _evalV(self, s):
+        # yyx：在这个函数中没找到DMPO论文的式9呀？在MultiCollect中~
+        # Requires input in shape [-1, n_agent, dim]
+        s = s.to(self.device)
+        # s变为有n_agent个元素的列表 且元素.shape = [-1, 邻域agent数量*dim]
+        # 各个agent的元素.shape不相同！因为邻域规模不同
+        # 得到的是s_{N_j}
+        s = self.get_networked_s(s, net='v')
+        values = []
+        for i in range(self.n_agent):
+            values.append(self.vs[i](s[i]))
+        # 填充后，values是有n_agent个元素的列表 元素.shape = (-1, 1)
+        # 得到的是V_j(s_{N_j}) 也即式(6)
+        return torch.stack(values, dim=1)
 
     def updateAgent(self, trajs, clip=None):
         time_t = time.time()
@@ -221,31 +247,14 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
         # yyx: can also add argument is_newbest, like save_nets()
         self.actors.load_state_dict(torch.load(dir_name + '/Models/' + str(episode) + 'best_actor.pt'))
 
-    def _evalV(self, s):
-        # yyx：在这个函数中没找到DMPO论文的式9呀？在MultiCollect中~
-        # Requires input in shape [-1, n_agent, dim]
-        s = s.to(self.device)
-        # s变为有n_agent个元素的列表 且元素.shape = [-1, 邻域agent数量*dim]
-        # 各个agent的元素.shape不相同！因为邻域规模不同
-        # 得到的是s_{N_j}
-        if self.use_extended_value:
-            s = self.collect_v.gather(s)
-        else:
-            n = s.shape[1]
-            assert n == self.n_agent
-            s = [s[:,i,:] for i in range(n)]  # 搞成和前者类似的shape
-        values = []
-        for i in range(self.n_agent):
-            values.append(self.vs[i](s[i]))
-        # 填充后，values是有n_agent个元素的列表 元素.shape = (-1, 1)
-        # 得到的是V_j(s_{N_j}) 也即式(6)
-        return torch.stack(values, dim=1)
+
     def _init_actors(self):
         # collect_pi.degree = [2,3,2] 意为一个agent与多少个agent连接（包括自己）
         collect_pi = MultiCollect(torch.matrix_power(self.adj, self.radius_pi), device=self.device)
         actors = nn.ModuleList()
         for i in range(self.n_agent):
-            self.pi_args.sizes[0] = collect_pi.degree[i] * self.observation_dim
+            self.pi_args.sizes[0] = collect_pi.degree[i] * self.observation_dim \
+                if self.use_extended_value else self.observation_dim
             actors.append(CategoricalActor(**self.pi_args._toDict()).to(self.device))
 
         return collect_pi, actors
@@ -254,13 +263,10 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
         collect_v = MultiCollect(torch.matrix_power(self.adj, self.radius_v), device=self.device)
         vs = nn.ModuleList()
         for i in range(self.n_agent):
-            # .degree[i]就是agent i的邻域规模
-            if self.use_extended_value:
-                self.v_args.sizes[0] = collect_v.degree[i] * self.observation_dim
-            else:
-                self.v_args.sizes[0] = self.observation_dim
-            v_fn = self.v_args.network
-            vs.append(v_fn(**self.v_args._toDict()).to(self.device))
+            # 确认网络的输入维度 其中.degree[i]是agent i的邻域规模，标量
+            self.v_args.sizes[0] = collect_v.degree[i] * self.observation_dim \
+                if self.use_extended_value else self.observation_dim
+            vs.append(MLP(**self.v_args._toDict()).to(self.device))
         return collect_v, vs
 
     def _process_traj(self, s, a, r, s1, d, logp):

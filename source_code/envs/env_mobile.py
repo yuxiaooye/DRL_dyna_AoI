@@ -34,7 +34,6 @@ class EnvMobile():
         self.ACTION_MODE = self.config("action_mode")
         self.SCALE = self.config("scale")
         self.UAV_NUM = self.config("uav_num")
-        # self.INITIAL_ENERGY = self.config("initial_energy")
         self.INITIAL_ENERGY = env_args['initial_energy']
         self.EPSILON = self.config("epsilon")
         self.ACTION_ROOT = self.config("action_root")
@@ -74,7 +73,7 @@ class EnvMobile():
 
 
         '''these mat is **read-only** 因此可以放在init中 而不必放在reset中每次episode开始时都读'''
-        self.poi_mat = self.rm.init_pois()
+        self.poi_mat = self.rm.init_pois(self.MAX_EPISODE_STEP)
         data_file_dir = f'envs/{self.input_args.dataset}'
         self.debug_index = self.poi_mat[:,0,:].sum(axis=-1).argmin()  # tmp
         # == OK 对读的这几个列表进行裁剪，时间步240->121，poi数244->33 ==
@@ -173,7 +172,13 @@ class EnvMobile():
         pass
 
     def _human_move(self):
+        # 如果max_episode_step=120，则
+        assert self.MAX_EPISODE_STEP in (120, 240)
         self.poi_position = copy.deepcopy(self.poi_mat[:, self.step_count, :])
+        # if self.MAX_EPISODE_STEP == 120:
+        #     self.poi_position = copy.deepcopy(self.poi_mat[:, self.step_count, :])
+        # else:
+        #     self.poi_position = copy.deepcopy(self.poi_mat[:, int(self.step_count/2), :])
 
     def step(self, action):
         # 若max_episode_step=120, 则执行120次step方法。episode结束时保存120个poi和uav的位置点，而不是icde的121个，把poi、uav的初始位置扔掉！
@@ -676,6 +681,7 @@ class EnvMobile():
 
     def save_trajs_2(self, best_trajs, total_steps=1,
                      phase='train', is_newbest=False):
+
         postfix = 'best' if is_newbest else str(total_steps)
         save_traj_dir = osp.join(self.input_args.output_dir, f'{phase}_saved_trajs')
         if not osp.exists(save_traj_dir): os.makedirs(save_traj_dir)

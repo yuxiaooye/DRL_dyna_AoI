@@ -1,7 +1,7 @@
 # !/bin/sh
 source activate yyx_ishen
-group='dmpo-mlp-0212'
+group='extendV-ablation-0214'
 nohup_dir='../nohup_log'
 mkdir -p ${nohup_dir}
-nohup python -u main_DPPO.py --algo DMPO --group ${group} --n_thread 4 --use-mlp-model --device cuda:3 >> ${nohup_dir}/0212.log 2>&1 &
-nohup python -u main_DPPO.py --algo DMPO --group ${group} --n_thread 4 --device cuda:3 >> ${nohup_dir}/0212.log 2>&1 &
+nohup python -u main_DPPO.py --group ${group} --device cuda:6 >> ${nohup_dir}/0214.log 2>&1 &
+nohup python -u main_DPPO.py --group ${group} --use-extended-value --device cuda:6 >> ${nohup_dir}/0214.log 2>&1 &

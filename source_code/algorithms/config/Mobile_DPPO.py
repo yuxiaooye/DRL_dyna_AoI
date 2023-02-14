@@ -7,7 +7,7 @@ from algorithms.models import MLP
 from algorithms.utils import Config
 
 
-def getArgs(radius_p, radius_v, radius_pi, env):
+def getArgs(radius_v, radius_pi, env):
 
     alg_args = Config()
     # 总训练步数 = n_iter * rollout_length，默认25K * 0.6K = 15M
@@ -32,16 +32,10 @@ def getArgs(radius_p, radius_v, radius_pi, env):
 
     # 下面这个值后续会被读，但env_ucs环境没有neighbor_mask属性，
     # 所以仿照catchup，在这里临时硬编码一个neighbor_mask
-    tmp_neighbor_mask = np.array(
-        [
-            [0, 1, 0],
-            [1, 0, 1],
-            [0, 1, 0],
-        ]
-    )
-    # agent_args.adj = env.neighbor_mask
-    agent_args.adj = tmp_neighbor_mask
-    agent_args.n_agent = agent_args.adj.shape[0]
+    from envs.neighbor_graph import get_adj
+
+    agent_args.n_agent = env.UAV_NUM
+    agent_args.adj = get_adj(env.UAV_NUM)
     agent_args.gamma = 0.99
     agent_args.lamda = 0.5
     agent_args.clip = 0.2
@@ -64,14 +58,13 @@ def getArgs(radius_p, radius_v, radius_pi, env):
     # agent_args.adj = env.neighbor_mask
     agent_args.radius_v = radius_v
     agent_args.radius_pi = radius_pi
-    agent_args.radius_p = radius_p
+    
     agent_args.squeeze = False
 
     p_args = None
     agent_args.p_args = p_args
 
     v_args = Config()
-    v_args.network = MLP
     v_args.activation = torch.nn.ReLU
     v_args.sizes = [-1, 64, 64, 1]
     agent_args.v_args = v_args

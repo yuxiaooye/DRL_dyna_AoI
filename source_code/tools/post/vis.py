@@ -31,17 +31,17 @@ def render_HTML(output_dir, tag='train', traj_filename='eps_best.npz'):
         env_config = params['env_config']
     uav_num = env_config['uav_num']
     poi_num = env_config['poi_num']
-    num_timestep = env_config['max_episode_step']
+    max_episode_step = env_config['max_episode_step']
     dataset = input_args['dataset']
-    poi_QoS = np.load(os.path.join(f'envs/{dataset}', f"QoS{num_timestep}/poi_QoS{input_args['dyna_level']}.npy"))
-    assert poi_QoS.shape == (poi_num, num_timestep)
+    poi_QoS = np.load(os.path.join(f'envs/{dataset}', f"QoS{max_episode_step}/poi_QoS{input_args['dyna_level']}.npy"))
+    assert poi_QoS.shape == (poi_num, max_episode_step)
     rm = Roadmap(dataset, env_config)
 
     '''从output_dir中拿到轨迹'''
     traj_file = osp.join(output_dir, f'{tag}_saved_trajs/{traj_filename}')
     trajs = np.load(traj_file)
     # poi_trajs, uav_trajs = list(trajs['arr_0']), list(trajs['arr_1'])
-    poi_trajs = rm.init_pois()
+    poi_trajs = rm.init_pois(max_episode_step)
     uav_trajs = list(trajs['arr_0'])
 
     map = folium.Map(location=[(rm.lower_left[1] + rm.upper_right[1]) / 2, (rm.lower_left[0] + rm.upper_right[0]) / 2],
@@ -77,6 +77,9 @@ def render_HTML(output_dir, tag='train', traj_filename='eps_best.npz'):
         'uav1': '#%02X%02X%02X' % (255, 0, 0),  # red
         'uav2': '#%02X%02X%02X' % (3, 204, 51),  # green
         'uav3': '#%02X%02X%02X' % (0, 0, 255),  # blue
+        'uav4': '#%02X%02X%02X' % (0, 0, 255),  # blue
+        'uav5': '#%02X%02X%02X' % (0, 0, 255),  # blue
+        'uav6': '#%02X%02X%02X' % (0, 0, 255),  # blue
     }
 
     # fillin positions for uav, human
@@ -84,7 +87,7 @@ def render_HTML(output_dir, tag='train', traj_filename='eps_best.npz'):
     for id in range(uav_num + poi_num):
         df = pd.DataFrame(
             {'id': id,
-             't': pd.date_range(start='20230315090000', end=None, periods=num_timestep + 1, freq='15s'),
+             't': pd.date_range(start='20230315090000', end=None, periods=max_episode_step + 1, freq='15s'),
              }
         )
         if id < uav_num:  # uav

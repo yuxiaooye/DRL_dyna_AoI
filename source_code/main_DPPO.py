@@ -34,10 +34,7 @@ def getRunArgs(input_args):
 
     run_args.radius_v = 1
     run_args.radius_pi = 1
-    run_args.radius_p = 1
 
-    run_args.radius_pi = 1
-    run_args.radius_p = 1
 
     run_args.start_step = 0
     run_args.save_period = 1800  # in seconds
@@ -51,7 +48,7 @@ def getAlgArgs(run_args, input_args, env):
     env_str = input_args.env[0].upper() + input_args.env[1:]
     config = importlib.import_module(f"algorithms.config.{env_str}_{input_args.algo}")
     # 在这里，得到了alg_args.agent_args.action_space
-    alg_args = config.getArgs(run_args.radius_p, run_args.radius_v, run_args.radius_pi, env)
+    alg_args = config.getArgs(run_args.radius_v, run_args.radius_pi, env)
     return alg_args
 
 
@@ -164,6 +161,7 @@ def parse_args():
     parser.add_argument('--use-extended-value', action='store_false', help='反逻辑，仅用于DPPO')
     parser.add_argument('--use-mlp-model', action='store_true', help='将model改为最简单的mlp，仅用于DMPO')
     parser.add_argument('--multi-mlp', action='store_true', help='在model中分开预测obs中不同类别的信息，仅用于DMPO')
+    parser.add_argument('--use_g2a_net', action='store_true', help='contribution')
     # tune env
     ## setting
     parser.add_argument('--use-fixed-range', action='store_true')
@@ -241,7 +239,7 @@ envs_test = SubprocVecEnv([env_fn_test(env_args, input_args, phase='test') for _
 
 os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3,4,5,6,7'
 
-logger = LogServer({'run_args': run_args, 'algo_args': alg_args})
+logger = LogServer({'run_args': run_args, 'algo_args': alg_args, 'input_args': input_args})
 logger = LogClient(logger)
 # logger同时被传入agent类和runner类
 agent = initAgent(logger, run_args.device, alg_args.agent_args, input_args)

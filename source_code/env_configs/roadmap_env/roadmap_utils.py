@@ -35,9 +35,9 @@ class Roadmap():
                 self.max_dis_x = 1221.4710883988212
             else: raise NotImplementedError
 
-    def init_pois(self):
+    def init_pois(self, max_episode_step):
         '''读df并处理表头'''
-        poi_df = pd.read_csv(osp.join(project_dir, f'envs/{self.dataset}/human.csv'))
+        poi_df = pd.read_csv(osp.join(project_dir, f'envs/{self.dataset}/human{max_episode_step}.csv'))
         try:  # 如果df中有'pz'列, 删除它
             poi_df.drop('pz', axis=1, inplace=True)
         except:

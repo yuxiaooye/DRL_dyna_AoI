@@ -284,8 +284,7 @@ class CPPOAgent(nn.ModuleList, YyxAgentBase):
         vs = nn.ModuleList()
         for i in range(self.n_agent):
             self.v_args.sizes[0] = collect_v.degree[i] * self.observation_dim
-            v_fn = self.v_args.network
-            vs.append(v_fn(**self.v_args._toDict()).to(self.device))
+            vs.append(MLP(**self.v_args._toDict()).to(self.device))
         return collect_v, vs
     
     def _process_traj(self, s, a, r, s1, d, logp):

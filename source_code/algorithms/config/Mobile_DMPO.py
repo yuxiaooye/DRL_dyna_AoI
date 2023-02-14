@@ -5,7 +5,7 @@ from algorithms.models import MLP
 from algorithms.utils import Config
 
 
-def getArgs(radius_p, radius_v, radius_pi, env):
+def getArgs(radius_v, radius_pi, env):
     alg_args = Config()
     alg_args.n_iter = 5000  # 25000
     alg_args.n_inner_iter = 10  # 在一个n_iter循环执行多少次内循环，内循环意为执行一次rollout_model() agent与learned model交互并更新一次Agent参数
@@ -66,7 +66,6 @@ def getArgs(radius_p, radius_v, radius_pi, env):
     agent_args.action_space = env.action_space
     agent_args.radius_v = radius_v
     agent_args.radius_pi = radius_pi
-    agent_args.radius_p = radius_p
     agent_args.squeeze = True
 
     p_args = Config()
@@ -81,7 +80,6 @@ def getArgs(radius_p, radius_v, radius_pi, env):
     agent_args.p_args = p_args
 
     v_args = Config()
-    v_args.network = MLP
     v_args.activation = torch.nn.ReLU
     v_args.sizes = [-1, 64, 64, 1]
     agent_args.v_args = v_args

@@ -44,7 +44,7 @@ class MultiCollect:
         adjacency = adjacency | torch.eye(n, device=device).bool() # Should contain self-loop, because an agent should utilize its own info.
         adjacency = adjacency.to(device)
         # print('a=',adjacency)
-        self.degree = adjacency.sum(dim=1) # Number of information available to the agent.
+        self.degree = adjacency.sum(dim=1)  # Number of information available to the agent.
         self.indices = []
         index_full = torch.arange(n, device=device)
         for i in range(n):

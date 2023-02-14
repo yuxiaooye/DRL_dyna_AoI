@@ -440,7 +440,7 @@ class LogServer(object):
     """
 
     def __init__(self, args):
-        run_args, algo_args = args['run_args'], args['algo_args']
+        run_args, algo_args, input_args = args['run_args'], args['algo_args'], args['input_args']
         self.run_args, self.algo_args = run_args, algo_args
         self.name = run_args.name  # 实验名字，包括超参数后缀的yyx经常用的那个
         self.mute = run_args.debug or run_args.mute_wandb  # wandb太慢，debug时不用
@@ -450,7 +450,9 @@ class LogServer(object):
             run = wandb.init(
                 project="dyna_AoI",
                 config={"run_args": run_args._toDict(recursive=True),
-                        "algo_args": algo_args._toDict(recursive=True)},
+                        "algo_args": algo_args._toDict(recursive=True),
+                        "input_args": vars(input_args),
+                        },
                 name=run_args.name,
                 group=run_args.group,  # 仅写自定义组名即可，环境名恒不变，算法名在runs名称中记录
                 dir='../wandb',  # dont save at source_code, keep it clean!
