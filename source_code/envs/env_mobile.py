@@ -27,7 +27,7 @@ class EnvMobile():
         # roadmap
         self.rm = Roadmap(self.input_args.dataset, self.config.dict)
 
-        self.DISCRIPTION = self.config('description')
+        self.USE_SNRMAP = self.input_args.use_snrmap
         self.MAP_X = self.rm.max_dis_x
         self.MAP_Y = self.rm.max_dis_y
         self.WEIGHTED_MODE = self.config("weighted_mode")
@@ -62,6 +62,7 @@ class EnvMobile():
         self.OBSTACLE = []
 
         self._get_energy_coefficient()
+        self._get_snrmap_info()
 
         if self.ACTION_MODE == 1:
             self.gym_action_space = spaces.Box(min=-1, max=1, shape=(2,))
@@ -172,13 +173,8 @@ class EnvMobile():
         pass
 
     def _human_move(self):
-        # 如果max_episode_step=120，则
-        assert self.MAX_EPISODE_STEP in (120, 240)
         self.poi_position = copy.deepcopy(self.poi_mat[:, self.step_count, :])
-        # if self.MAX_EPISODE_STEP == 120:
-        #     self.poi_position = copy.deepcopy(self.poi_mat[:, self.step_count, :])
-        # else:
-        #     self.poi_position = copy.deepcopy(self.poi_mat[:, int(self.step_count/2), :])
+
 
     def step(self, action):
         # 若max_episode_step=120, 则执行120次step方法。episode结束时保存120个poi和uav的位置点，而不是icde的121个，把poi、uav的初始位置扔掉！
@@ -556,6 +552,7 @@ class EnvMobile():
             else:  # 看不到观测范围外的uav
                 obs.extend([0, 0])
 
+        # user的信息
         for poi_index, (poi_position, poi_value) in enumerate(zip(poi_position_all, poi_value_all)):
             d = self._cal_distance(poi_position, self.uav_position[agent_id])
             if not d < self.agent_field:  # user不在观测范围内
@@ -609,13 +606,65 @@ class EnvMobile():
                 is_arrival = check_future_arrival(poi_index, t)
                 obs.append(is_arrival)
 
-        obs.append(self.step_count / self.MAX_EPISODE_STEP)  # 把当前的step_count也喂到obs中
+        # snrmap的信息
+        if self.USE_SNRMAP:
+            obs.extend(self._get_snrmap(i))
+
+        # 把当前的step_count也喂到obs中
+        obs.append(self.step_count / self.MAX_EPISODE_STEP)
         obs = np.asarray(obs)
         return obs
 
+    def _get_snrmap_info(self):
+        self.cell_num = 6
+        self.cell_span_x = self.MAP_X/self.cell_num
+        self.cell_span_y = self.MAP_Y/self.cell_num
+
+    def _get_snrmap(self, i):
+        snrmap = np.zeros((self.cell_num, self.cell_num))
+
+        '''
+        计算每个(uav-user)对的ans
+        队列中有包的poi距离它最近的uav有多远 即为d，当然这是很naive的做法，设计的自由度很高、可考虑的东西很多
+        '''
+        # 要的是下一步user的位置，所以+1
+        next_poi_positions = copy.deepcopy(self.poi_mat[:, min(self.step_count+1, self.poi_mat.shape[1]-1), :])  # 终止状态越界，取min
+        # 如果更精细地做，poi_value也应该是用下一时刻的，不过当前时刻新产生的包大概率也不会被下一时刻的无人机收集到（因为FIFO），所以先不做
+        for poi_index, (next_poi_position, poi_value) in enumerate(zip(next_poi_positions, self.poi_value)):
+            if len(self.poi_value[poi_index]) == 0: continue  # 队列中没包的条件是len为0吗？
+            d_min = float('inf')
+            for uav_index in range(self.n_agents):
+                d = self._cal_distance(next_poi_position, self.uav_position[uav_index])
+                d_min = min(d, d_min)
+            if self.input_args.use_fixed_range:
+                next_SNRth = self.COLLECT_RANGE
+            else:  # self.step_count-1是当前的阈值，这里要的是下一步的阈值，所以不-1
+                next_SNRth = self.poi_QoS[poi_index][self.step_count]
+            # ans反映一个poi的需求没被满足的gap，物理意义是uav应该朝着ans大的cell移动
+            # 一方面，d_min越大，说明当前没有无人机靠近该user
+            # 另一方面，mext_SNRth越小，说明无人机必须很接近该user才能meet his/her requirement
+            # 如果已经有无人机在收集范围内，ans置为0
+            ans = max(d_min - next_SNRth, 0)
+            x, y = next_poi_position
+            i = np.clip(int(x/self.cell_span_x), 0, self.cell_num-1)
+            j = np.clip(int(y/self.cell_span_y), 0, self.cell_num-1)
+            snrmap[i][j] += ans  # 根据用户位置把ans加到具体的cell中
+
+        if snrmap.max() != 0:
+            snrmap = snrmap / snrmap.max()  # 归一化
+        snrmap = snrmap.reshape(self.cell_num * self.cell_num, )
+        # TODO 目前的实现是全局snr-map 后面改成每个uav各自部分可观
+        return snrmap.tolist()
+
+
+
     def get_obs_size(self):
         size = 2 * self.UAV_NUM + self.POI_NUM * self.poi_property_num + 1  # 1是step_count
-        size += self.POI_NUM * self.input_args.future_obs * 3  # yyx add
+        # yyx add future obs
+        size += self.POI_NUM * self.input_args.future_obs * 3
+        # yyx add snr-map
+        if self.USE_SNRMAP:
+            size += self.cell_num * self.cell_num
         return size
 
     def get_avail_actions(self):

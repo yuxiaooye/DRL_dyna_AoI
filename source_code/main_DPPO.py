@@ -109,6 +109,9 @@ def override(alg_args, run_args, input_args):
         run_args.name += f'_MaxTs={input_args.max_episode_step}'
     if input_args.future_obs != 0:
         run_args.name += f'_FutureObs={input_args.future_obs}'
+    if input_args.use_snrmap:
+        run_args.name += f'_UseSNRMAP'
+
 
 
     # tune algo
@@ -173,6 +176,7 @@ def parse_args():
     ## MDP
     parser.add_argument('--max_episode_step', type=int, default=120)
     parser.add_argument('--future_obs', type=int, default=0)
+    parser.add_argument('--use_snrmap', action='store_true')
     args = parser.parse_args()
 
     if args.multi_mlp:
