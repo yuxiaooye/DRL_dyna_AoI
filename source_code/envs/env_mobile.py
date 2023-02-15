@@ -31,7 +31,6 @@ class EnvMobile():
         self.MAP_X = self.rm.max_dis_x
         self.MAP_Y = self.rm.max_dis_y
         self.WEIGHTED_MODE = self.config("weighted_mode")
-        self.ACTION_MODE = self.config("action_mode")
         self.SCALE = self.config("scale")
         self.UAV_NUM = self.config("uav_num")
         self.INITIAL_ENERGY = env_args['initial_energy']
@@ -53,7 +52,7 @@ class EnvMobile():
         self.USER_DATA_AMOUNT = self.config("user_data_amount")
 
         self.n_agents = self.UAV_NUM
-        self.n_actions = 1 if self.ACTION_MODE else self.ACTION_ROOT
+        self.n_actions = self.ACTION_ROOT
         self.agent_field = self.config("agent_field")
 
         self.MAX_FIY_DISTANCE = self.TIME_SLOT * self.UAV_SPEED / self.SCALE
@@ -63,14 +62,7 @@ class EnvMobile():
 
         self._get_energy_coefficient()
         self._get_snrmap_info()
-
-        if self.ACTION_MODE == 1:
-            self.gym_action_space = spaces.Box(min=-1, max=1, shape=(2,))
-        elif self.ACTION_MODE == 0:
-            self.gym_action_space = spaces.Discrete(self.ACTION_ROOT)
-        else:
-            self.gym_action_space = spaces.Discrete(1)
-        self.action_space = self.gym_action_space
+        self.action_space = spaces.Discrete(9)  # 硬编码，跟昊宝的实现保持一致
 
 
         '''these mat is **read-only** 因此可以放在init中 而不必放在reset中每次episode开始时都读'''
@@ -198,7 +190,12 @@ class EnvMobile():
             self._use_energy(uav_index, energy_consuming)
             # tau - 移动时间 = 收集时间
             # 打印发现要么是12.5，要么是20，昊宝用的是周围若干个点的离散动作，distance只有两种情况
-            collect_time = max(0, self.TIME_SLOT - distance / self.UAV_SPEED) if not Flag else 0
+            if self.input_args.fixed_col_time:
+                a = 12.5  # 先硬编码为12.5
+                assert 0 <= a <= self.TIME_SLOT
+                collect_time = a if not Flag else 0
+            else:
+                collect_time = max(0, self.TIME_SLOT - distance / self.UAV_SPEED) if not Flag else 0
             r, uav_data_collect[uav_index] = self._collect_data_from_poi(  # 调用关键函数，uav收集
                 uav_index, collect_time)
 
@@ -344,10 +341,7 @@ class EnvMobile():
         return self.Power_flying * moving_time + self.Power_hovering * hover_time
 
     def _cal_uav_next_pos(self, uav_index, action):
-        if self.ACTION_MODE == 1:
-            dx, dy = self._get_vector_by_theta(action)
-        else:
-            dx, dy = self._get_vector_by_action(int(action))  # 形如[1.5, 0]或[sqrt(1.5), sqrt(1.5)]
+        dx, dy = self._get_vector_by_action(int(action))  # 形如[1.5, 0]或[sqrt(1.5), sqrt(1.5)]
         self.last_action[uav_index] = [dx, dy]
         distance = np.sqrt(np.power(dx * self.SCALE, 2) +  # SCALE = 100, 将1.5缩放为150米，无人机速度为20米/秒，即在一个timeslot里飞行用时7.5秒
                            np.power(dy * self.SCALE, 2))
@@ -387,10 +381,16 @@ class EnvMobile():
                 poi_index = position_list[i][0]  # 首次到达断点时，poi_index = 128
                 rate = self._get_data_rate(
                     self.uav_position[uav_index], self.poi_position[poi_index])
-                if rate <= self.RATE_THRESHOLD:  # RATE_THRESHOLD = 0.05
+                # TODO 对data rate的需求，既可以用SNRth描述，也可以用RATEth~~是等价的
+                if rate <= self.RATE_THRESHOLD:  # RATE_THRESHOLD = 0.05，random跑的时候一次都不触发，可以扔了
                     rate = 0
                 update_user_num = min(50, len(self.poi_value[poi_index]))
-                delta_t = self.USER_DATA_AMOUNT / rate  # 单位为秒，值都是零点几
+                if self.input_args.amount_prop_to_SNRth:  # amount与当前时刻SNRth成反比
+                    SNRth = self.poi_QoS[poi_index][self.step_count-1]
+                    amount = (500 - SNRth)/2 + 1  # 将100~500映射为3~1
+                else:
+                    amount = self.USER_DATA_AMOUNT
+                delta_t = amount / rate  # 单位为秒，值都是零点几
                 weight = 1 if not self.WEIGHTED_MODE else self.poi_weight[poi_index]
 
                 debug_packet_num_before_collect = len(self.poi_value[poi_index])

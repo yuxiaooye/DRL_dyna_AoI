@@ -1,0 +1,215 @@
+from torch.distributions.categorical import Categorical
+import torch
+import torch.nn as nn
+import torch.nn.functional as f
+import numpy as np
+from algorithms.algo.agent.DPPO import DPPOAgent
+from algorithms.models import GaussianActor, GraphConvolutionalModel, MLP, CategoricalActor
+from torch.optim import Adam
+
+'''输入所有agent的obs，输出表征模块后各agent的obs embedding（魔改仅删除了过decoding）'''
+class G2AEmbedNet(nn.Module):
+    def __init__(self, obs_dim, n_actions, n_agent, device,
+                 rnn_hidden_dim=64, attention_dim=32, hard=True):
+        super(G2AEmbedNet, self).__init__()
+
+        self.n_agent = n_agent
+        self.device = device
+        self.rnn_hidden_dim = rnn_hidden_dim
+        self.attention_dim = attention_dim
+        self.hard = hard
+
+        # Encoding
+        self.encoding = nn.Linear(obs_dim, self.rnn_hidden_dim)  # 对所有agent的obs解码
+        # 把rnn扔了！
+        # self.h = nn.GRUCell(self.rnn_hidden_dim, self.rnn_hidden_dim)  # 每个agent根据自己的obs编码得到hidden_state，用于记忆之前的obs
+
+        # Hard
+        # GRU输入[[h_i,h_1],[h_i,h_2],...[h_i,h_n]]与[0,...,0]，输出[[h_1],[h_2],...,[h_n]]与[h_n]， h_j表示了agent j与agent i的关系
+        # 输入的iputs维度为(n_agents - 1, batch_size * n_agents, rnn_hidden_dim * 2)，
+        # 即对于batch_size条数据，输入每个agent与其他n_agents - 1个agents的hidden_state的连接
+        self.hard_bi_GRU = nn.GRU(self.rnn_hidden_dim * 2, self.rnn_hidden_dim, bidirectional=True)
+        # 对h_j进行分析，得到agent j对于agent i的权重，输出两维，经过gumble_softmax后取其中一维即可，如果是0则不考虑agent j，如果是1则考虑
+        self.hard_encoding = nn.Linear(self.rnn_hidden_dim * 2, 2)  # 乘2因为是双向GRU，hidden_state维度为2 * hidden_dim
+
+        # Soft
+        self.q = nn.Linear(self.rnn_hidden_dim, self.attention_dim, bias=False)
+        self.k = nn.Linear(self.rnn_hidden_dim, self.attention_dim, bias=False)
+        self.v = nn.Linear(self.rnn_hidden_dim, self.attention_dim)
+
+        # Decoding 输入自己的h_i与x_i，输出自己动作的概率分布
+        # self.decoding = nn.Linear(self.rnn_hidden_dim + self.attention_dim, n_actions)
+
+    def forward(self, obs):
+        '''
+        obs.shape = (threads, n_agent, dim)
+        '''
+        n_thread = obs.shape[0]
+        assert obs.shape[1] == self.n_agent
+        size = self.n_agent * n_thread  # 从n_agent魔改为n_agent*n_thread
+        # 先对obs编码
+        obs_encoding = f.relu(self.encoding(obs))
+        # h_in = hidden_state.reshape(-1, self.rnn_hidden_dim)
+
+        # 经过自己的GRU得到h yyx把GRU扔了！
+        # h_out = self.h(obs_encoding, h_in)  # (batch_size * n_agents, self.rnn_hidden_dim)
+        h_out = obs_encoding
+
+        # Hard Attention，GRU和GRUCell不同，输入的维度是(序列长度,batch_size, dim)
+        if self.hard:
+            # Hard Attention前的准备
+            h = h_out.reshape(-1, self.n_agent, self.rnn_hidden_dim)  # 把h转化出n_agents维度，(batch_size, n_agents, rnn_hidden_dim)
+            input_hard = []
+            for i in range(self.n_agent):
+                h_i = h[:, i]  # (batch_size, rnn_hidden_dim)
+                h_hard_i = []
+                for j in range(self.n_agent):  # 对于agent i，把自己的h_i与其他agent的h分别拼接
+                    if j != i:
+                        h_hard_i.append(torch.cat([h_i, h[:, j]], dim=-1))
+                # j 循环结束之后，h_hard_i是一个list里面装着n_agents - 1个维度为(batch_size, rnn_hidden_dim * 2)的tensor
+                h_hard_i = torch.stack(h_hard_i, dim=0)
+                input_hard.append(h_hard_i)
+            # i循环结束之后，input_hard是一个list里面装着n_agents个维度为(n_agents - 1, batch_size, rnn_hidden_dim * 2)的tensor
+            input_hard = torch.stack(input_hard, dim=-2)
+            # 最终得到维度(n_agents - 1, batch_size * n_agents, rnn_hidden_dim * 2)，可以输入了
+            input_hard = input_hard.view(self.n_agent - 1, -1, self.rnn_hidden_dim * 2)
+
+            h_hard = torch.zeros((2 * 1, size, self.rnn_hidden_dim))  # 因为是双向GRU，每个GRU只有一层，所以第一维是2 * 1
+            h_hard = h_hard.to(self.device)
+            h_hard, _ = self.hard_bi_GRU(input_hard, h_hard)  # (n_agents - 1,batch_size * n_agents,rnn_hidden_dim * 2)
+            h_hard = h_hard.permute(1, 0, 2)  # (batch_size * n_agents, n_agents - 1, rnn_hidden_dim * 2)
+            h_hard = h_hard.reshape(-1, self.rnn_hidden_dim * 2)  # (batch_size * n_agents * (n_agents - 1), rnn_hidden_dim * 2)
+
+            # 得到hard权重, (n_agents, batch_size, 1,  n_agents - 1)，多出一个维度，下面加权求和的时候要用
+            hard_weights = self.hard_encoding(h_hard)
+            hard_weights = f.gumbel_softmax(hard_weights, tau=0.01)
+            # print(hard_weights)
+            hard_weights = hard_weights[:, 1].view(-1, self.n_agent, 1, self.n_agent - 1)
+            hard_weights = hard_weights.permute(1, 0, 2, 3)
+
+        else:
+            hard_weights = torch.ones((self.n_agent, size // self.n_agent, 1, self.n_agent - 1))
+            hard_weights = hard_weights.to(self.device)
+
+        # Soft Attention
+        q = self.q(h_out).reshape(-1, self.n_agent, self.attention_dim)  # (batch_size, n_agents, self.attention_dim)
+        k = self.k(h_out).reshape(-1, self.n_agent, self.attention_dim)  # (batch_size, n_agents, self.attention_dim)
+        v = f.relu(self.v(h_out)).reshape(-1, self.n_agent, self.attention_dim)  # (batch_size, n_agents, self.attention_dim)
+        x = []
+        for i in range(self.n_agent):
+            q_i = q[:, i].view(-1, 1, self.attention_dim)  # agent i的q，(batch_size, 1, self.attention_dim)
+            k_i = [k[:, j] for j in range(self.n_agent) if j != i]  # 对于agent i来说，其他agent的k
+            v_i = [v[:, j] for j in range(self.n_agent) if j != i]  # 对于agent i来说，其他agent的v
+
+            k_i = torch.stack(k_i, dim=0)  # (n_agents - 1, batch_size, self.attention_dim)
+            k_i = k_i.permute(1, 2, 0)  # 交换三个维度，变成(batch_size, self.attention_dim， n_agents - 1)
+            v_i = torch.stack(v_i, dim=0)
+            v_i = v_i.permute(1, 2, 0)
+
+            # (batch_size, 1, attention_dim) * (batch_size, attention_dim，n_agents - 1) = (batch_size, 1，n_agents - 1)
+            score = torch.matmul(q_i, k_i)
+
+            # 归一化
+            scaled_score = score / np.sqrt(self.attention_dim)
+
+            # softmax得到权重
+            soft_weight = f.softmax(scaled_score, dim=-1)  # (batch_size，1, n_agents - 1)
+
+            # 加权求和，注意三个矩阵的最后一维是n_agents - 1维度，得到(batch_size, self.attention_dim)
+            x_i = (v_i * soft_weight * hard_weights[i]).sum(dim=-1)
+            x.append(x_i)
+
+        # 合并每个agent的h与x
+        # TODO 这里暂时魔改
+        x = torch.stack(x, dim=-1).reshape(n_thread, self.n_agent, self.attention_dim)  # (batch_size, n_agents, self.attention_dim)
+        obs_embed = torch.cat([h_out, x], dim=-1)
+        # output = self.decoding(obs_embed)
+
+        return obs_embed
+
+
+class G2ANetAgent(DPPOAgent):
+    def __init__(self, logger, device, agent_args, input_args):
+        DPPOAgent.__init__(self, logger, device, agent_args, input_args)
+
+        self.rnn_hidden_dim = 64
+        self.attention_dim = 32
+
+        self.g2a_embed_net = G2AEmbedNet(obs_dim=agent_args.observation_dim,
+                             n_actions=self.act_dim,
+                             n_agent=agent_args.n_agent,
+                             device=device,
+                             rnn_hidden_dim=self.rnn_hidden_dim,
+                             attention_dim=self.attention_dim
+                             ).to(device)
+
+        # 先用一个全连接层，DPPO里的actor和vs层数更多
+
+        pi_dict, v_dict = self.pi_args._toDict(), self.v_args._toDict()
+        pi_dict['sizes'][0] = self.rnn_hidden_dim + self.attention_dim  # 魔改维度！
+        v_dict['sizes'][0] = self.rnn_hidden_dim + self.attention_dim  # 魔改维度！
+        self.actors = nn.ModuleList()
+        self.vs = nn.ModuleList()
+        for i in range(self.n_agent):
+            self.actors.append(CategoricalActor(**pi_dict).to(self.device))
+            self.vs.append(MLP(**v_dict).to(self.device))
+
+        self.optimizer_pi = Adam(self.actors.parameters(), lr=self.lr)
+        self.optimizer_v = Adam(self.vs.parameters(), lr=self.lr_v)
+
+        print(1)
+
+    #
+    # def act(self, s):  # TODO 现在这三个函数写的不优雅，其实就重写了一行
+    #     with torch.no_grad():
+    #         assert s.dim() == 3
+    #         s = s.to(self.device)
+    #         '''only different'''
+    #         s = self.g2a_embed_net(s)
+    #         # Now s[i].dim() == ([-1, dim]) 注意不同agent的dim不同，由它的邻居数量决定
+    #         probs = []
+    #         for i in range(self.n_agent):
+    #             probs.append(self.actors[i](s[:,i,:]))
+    #         probs = torch.stack(probs, dim=1)  # shape = (-1, NUM_AGENT, act_dim)
+    #         return Categorical(probs)
+    #
+    # def get_logp(self, s, a):
+    #     """
+    #     Requires input of [batch_size, n_agent, dim] or [n_agent, dim].
+    #     Returns a tensor whose dim() == 3.
+    #     """
+    #     s = torch.as_tensor(s, dtype=torch.float32, device=self.device)
+    #
+    #     while s.dim() <= 2:
+    #         s = s.unsqueeze(0)
+    #         a = a.unsqueeze(0)
+    #     while a.dim() < s.dim():
+    #         a = a.unsqueeze(-1)
+    #
+    #     s = self.g2a_embed_net(s)
+    #     # Now s[i].dim() == 2, a.dim() == 3
+    #     log_prob = []
+    #     for i in range(self.n_agent):
+    #         probs = self.actors[i](s[i])
+    #         log_prob.append(torch.log(torch.gather(probs, dim=-1, index=torch.select(a, dim=1, index=i).long())))
+    #     log_prob = torch.stack(log_prob, dim=1)
+    #     while log_prob.dim() < 3:
+    #         log_prob = log_prob.unsqueeze(-1)
+    #     return log_prob
+    #
+    # def _evalV(self, s):
+    #     # yyx：在这个函数中没找到DMPO论文的式9呀？在MultiCollect中~
+    #     # Requires input in shape [-1, n_agent, dim]
+    #     s = s.to(self.device)
+    #     # s变为有n_agent个元素的列表 且元素.shape = [-1, 邻域agent数量*dim]
+    #     # 各个agent的元素.shape不相同！因为邻域规模不同
+    #     # 得到的是s_{N_j}
+    #     s = self.g2a_embed_net(s)
+    #     values = []
+    #     for i in range(self.n_agent):
+    #         values.append(self.vs[i](s[i]))
+    #     # 填充后，values是有n_agent个元素的列表 元素.shape = (-1, 1)
+    #     # 得到的是V_j(s_{N_j}) 也即式(6)
+    #     return torch.stack(values, dim=1)
+
+

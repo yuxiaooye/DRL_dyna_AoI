@@ -36,7 +36,6 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
 
     def __init__(self, logger, device, agent_args, input_args):
         super().__init__()
-        self.act_dim = 9  # 硬编码
         self.input_args = input_args
         self.use_extended_value = input_args.use_extended_value
 
@@ -65,6 +64,7 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
         if input_args.use_stack_frame:
             self.observation_dim *= 4
         self.action_space = agent_args.action_space
+        self.act_dim = self.action_space.n
 
         self.adj = torch.as_tensor(agent_args.adj, device=self.device, dtype=torch.float)
         self.radius_v = agent_args.radius_v

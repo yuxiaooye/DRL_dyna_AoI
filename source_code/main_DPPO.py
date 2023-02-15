@@ -104,6 +104,11 @@ def override(alg_args, run_args, input_args):
         run_args.name += f'_FixedRange'
     if input_args.uav_num != 3:
         run_args.name += f'_UAVNum={input_args.uav_num}'
+    if not input_args.fixed_col_time:
+        run_args.name += f'_NotFixedColTime'
+    if input_args.amount_prop_to_SNRth:
+        run_args.name += f'_AmountPropToSNRth'
+
     ## MDP
     if input_args.max_episode_step != 120:
         run_args.name += f'_MaxTs={input_args.max_episode_step}'
@@ -111,6 +116,7 @@ def override(alg_args, run_args, input_args):
         run_args.name += f'_FutureObs={input_args.future_obs}'
     if input_args.use_snrmap:
         run_args.name += f'_UseSNRMAP'
+
 
 
 
@@ -173,6 +179,8 @@ def parse_args():
     parser.add_argument('--user_data_amount', type=int, default=1)
     parser.add_argument('--update_num', type=int, default=10)
     parser.add_argument('--uav_num', type=int, default=3)
+    parser.add_argument('--fixed-col-time', action='store_false')
+    parser.add_argument('--amount_prop_to_SNRth', action='store_true')
     ## MDP
     parser.add_argument('--max_episode_step', type=int, default=120)
     parser.add_argument('--future_obs', type=int, default=0)
@@ -219,7 +227,6 @@ env_fn_train, env_fn_test = EnvMobile, EnvMobile
 
 
 env_args = {  # 这里环境类的参数抄昊宝
-    "action_mode": 3,
     "emergency_threshold": 100,
     "max_episode_step": input_args.max_episode_step,
     "collect_range": input_args.snr,

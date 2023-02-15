@@ -39,7 +39,6 @@ class Config(object):
             "description": "default",
             # Env
             "task_id": 0,
-            "action_mode": 0,  # 1 for continuous,  0 for discrete,
             "action_root": 13,
             "dataset": "NCSU",
             "max_episode_step": 120,  # 适配NCSU中的human.csv~~

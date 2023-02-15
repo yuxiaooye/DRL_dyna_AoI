@@ -34,12 +34,6 @@ class IA2C(nn.ModuleList, YyxAgentBase):
     def __init__(self, logger, device, agent_args, input_args, **kwargs):
         super().__init__()
         self.discrete = True  # 硬编码
-        if self.discrete:
-            self.action_dim = 9  # 硬编码
-            self.action_shape = self.action_dim
-        else:
-            raise NotImplementedError
-
         self.logger = logger
         self.device = device
         self.n_agent = agent_args.n_agent
@@ -64,6 +58,7 @@ class IA2C(nn.ModuleList, YyxAgentBase):
 
         self.observation_dim = agent_args.observation_dim
         self.action_space = agent_args.action_space
+        self.action_dim = self.action_space.n
 
         # if adj diag is not one, we should add a eye matrix
         agent_args.adj = (torch.as_tensor(agent_args.adj, device=self.device, dtype=torch.float)>0) | torch.eye(self.n_agent, device=device).bool()

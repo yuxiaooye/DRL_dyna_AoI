@@ -21,7 +21,7 @@ sys.path.append(os.getcwd())
 from env_configs.roadmap_env.roadmap_utils import *
 
 
-def render_HTML(output_dir, tag='train', traj_filename='eps_best.npz'):
+def render_HTML(output_dir, tag='train', draw_snrth=False, traj_filename='eps_best.npz'):
 
     '''从params.json中拿到训练时参数'''
     json_file = osp.join(output_dir, 'params.json')
@@ -45,7 +45,7 @@ def render_HTML(output_dir, tag='train', traj_filename='eps_best.npz'):
     uav_trajs = list(trajs['arr_0'])
 
     map = folium.Map(location=[(rm.lower_left[1] + rm.upper_right[1]) / 2, (rm.lower_left[0] + rm.upper_right[0]) / 2],
-                     tiles="cartodbpositron", zoom_start=14, max_zoom=24)
+                     tiles="cartodbpositron", zoom_start=15, max_zoom=24)
     folium.TileLayer('Stamen Terrain').add_to(map)
     folium.TileLayer('Stamen Toner').add_to(map)
     folium.TileLayer('cartodbpositron').add_to(map)
@@ -115,8 +115,8 @@ def render_HTML(output_dir, tag='train', traj_filename='eps_best.npz'):
 
     for index, traj in enumerate(trajs.trajectories):
         name, color = get_name_color_by_index(index)
-        features = traj_to_timestamped_geojson(index, traj, poi_QoS, uav_num, color,
-                                               input_args, env_config)
+        features = traj_to_timestamped_geojson(index, traj, rm, poi_QoS, uav_num, color,
+                                               input_args, env_config, draw_snrth=True)
 
         TimestampedGeoJson(  # 这里解注释了一个try except
             {
@@ -154,10 +154,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--output_dir")
     parser.add_argument("--tag", type=str, default='train', choices=['train', 'test'], help='load trajs from train or test')
+    parser.add_argument("--draw-snrth", action='store_true')
     args = parser.parse_args()
 
     render_HTML(
         args.output_dir,
         args.tag,
+        args.draw_snrth,
     )
 
