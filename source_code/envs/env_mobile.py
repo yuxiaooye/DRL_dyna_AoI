@@ -381,7 +381,7 @@ class EnvMobile():
                 poi_index = position_list[i][0]  # 首次到达断点时，poi_index = 128
                 rate = self._get_data_rate(
                     self.uav_position[uav_index], self.poi_position[poi_index])
-                # TODO 对data rate的需求，既可以用SNRth描述，也可以用RATEth~~是等价的
+                # 对data rate的需求，既可以用SNRth描述，也可以用RATEth~~是等价的
                 if rate <= self.RATE_THRESHOLD:  # RATE_THRESHOLD = 0.05，random跑的时候一次都不触发，可以扔了
                     rate = 0
                 update_user_num = min(50, len(self.poi_value[poi_index]))

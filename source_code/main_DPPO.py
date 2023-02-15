@@ -44,7 +44,8 @@ def getRunArgs(input_args):
 
 
 def getAlgArgs(run_args, input_args, env):
-    assert input_args.env in ['mobile'] and input_args.algo in ['DPPO', 'CPPO', 'DMPO', 'IC3Net', 'IA2C', 'G2ANet']
+    assert input_args.env in ['mobile']
+    assert input_args.algo in ['DPPO', 'CPPO', 'DMPO', 'IC3Net', 'IA2C', 'G2ANet', 'IPPO']
     env_str = input_args.env[0].upper() + input_args.env[1:]
     config = importlib.import_module(f"algorithms.config.{env_str}_{input_args.algo}")
     # 在这里，得到了alg_args.agent_args.action_space
@@ -152,7 +153,7 @@ def parse_args():
     parser.add_argument('--debug', action='store_true', default=False, )
     parser.add_argument('--test', action='store_true', default=False, )
     parser.add_argument('--env', type=str, default='mobile')
-    parser.add_argument('--algo', type=str, required=False, default='DPPO', help="algorithm(DMPO/IC3Net/CPPO/DPPO/IA2C) ")
+    parser.add_argument('--algo', type=str, required=False, default='DPPO', help="algorithm(DMPO/IC3Net/CPPO/DPPO/IA2C/IPPO) ")
     parser.add_argument('--device', type=str, required=False, default='cuda:0', help="device(cpu/cuda:0/cuda:1/...) ")
     parser.add_argument("--dataset", type=str, default='NCSU', choices=['NCSU'])
     # dirs
@@ -167,7 +168,7 @@ def parse_args():
     parser.add_argument('--lr', type=float)
     parser.add_argument('--lr_v', type=float)
     parser.add_argument('--use-stack-frame', action='store_true')
-    parser.add_argument('--use-extended-value', action='store_false', help='反逻辑，仅用于DPPO')
+    parser.add_argument('--use_extended_value', action='store_false', help='反逻辑，仅用于DPPO')
     parser.add_argument('--use-mlp-model', action='store_true', help='将model改为最简单的mlp，仅用于DMPO')
     parser.add_argument('--multi-mlp', action='store_true', help='在model中分开预测obs中不同类别的信息，仅用于DMPO')
     # tune env
@@ -193,6 +194,7 @@ def parse_args():
     if args.debug:
         assert args.group == 'debug'
     args.output_dir = f'runs/{args.group}'
+
     return args
 
 input_args = parse_args()
@@ -220,7 +222,9 @@ elif input_args.algo == 'CPPO':
 elif input_args.algo == 'DMPO':
     from algorithms.algo.agent.DMPO import DMPOAgent as agent_fn
 elif input_args.algo == 'G2ANet':
-    from algorithms.algo.agent.yyx_G2ANetAgent import G2ANetAgent as agent_fn
+    from algorithms.algo.agent.G2ANet import G2ANetAgent as agent_fn
+elif input_args.algo == 'IPPO':
+    from algorithms.algo.agent.IPPO import IPPOAgent as agent_fn
 
 from envs.env_mobile import EnvMobile
 env_fn_train, env_fn_test = EnvMobile, EnvMobile

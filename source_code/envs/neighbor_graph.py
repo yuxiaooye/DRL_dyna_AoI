@@ -7,17 +7,7 @@ def get_adj(agent_num):
             [0, 1, 0],
         ])
     elif agent_num == 6:
-        # 日字编队
-        # return np.array([
-        #     [0, 1, 1, 0, 0, 0],
-        #     [1, 0, 0, 1, 0, 0],
-        #     [1, 0, 0, 1, 1, 0],
-        #     [0, 1, 1, 0, 0, 1],
-        #     [0, 0, 1, 0, 0, 1],
-        #     [0, 0, 0, 1, 1, 0],
-        # ])
-
-        return np.array([
+        return np.array([  # 随便搞的
             [0, 1, 1, 0, 0, 0],
             [1, 0, 1, 0, 0, 0],
             [1, 1, 0, 0, 0, 0],
@@ -27,4 +17,4 @@ def get_adj(agent_num):
         ])
 
     else:
-        raise NotImplementedError
+        return None

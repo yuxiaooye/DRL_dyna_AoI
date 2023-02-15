@@ -120,7 +120,7 @@ class G2AEmbedNet(nn.Module):
             x.append(x_i)
 
         # 合并每个agent的h与x
-        # TODO 这里暂时魔改
+        # 这里暂时魔改
         x = torch.stack(x, dim=-1).reshape(n_thread, self.n_agent, self.attention_dim)  # (batch_size, n_agents, self.attention_dim)
         obs_embed = torch.cat([h_out, x], dim=-1)
         # output = self.decoding(obs_embed)
@@ -159,57 +159,5 @@ class G2ANetAgent(DPPOAgent):
 
         print(1)
 
-    #
-    # def act(self, s):  # TODO 现在这三个函数写的不优雅，其实就重写了一行
-    #     with torch.no_grad():
-    #         assert s.dim() == 3
-    #         s = s.to(self.device)
-    #         '''only different'''
-    #         s = self.g2a_embed_net(s)
-    #         # Now s[i].dim() == ([-1, dim]) 注意不同agent的dim不同，由它的邻居数量决定
-    #         probs = []
-    #         for i in range(self.n_agent):
-    #             probs.append(self.actors[i](s[:,i,:]))
-    #         probs = torch.stack(probs, dim=1)  # shape = (-1, NUM_AGENT, act_dim)
-    #         return Categorical(probs)
-    #
-    # def get_logp(self, s, a):
-    #     """
-    #     Requires input of [batch_size, n_agent, dim] or [n_agent, dim].
-    #     Returns a tensor whose dim() == 3.
-    #     """
-    #     s = torch.as_tensor(s, dtype=torch.float32, device=self.device)
-    #
-    #     while s.dim() <= 2:
-    #         s = s.unsqueeze(0)
-    #         a = a.unsqueeze(0)
-    #     while a.dim() < s.dim():
-    #         a = a.unsqueeze(-1)
-    #
-    #     s = self.g2a_embed_net(s)
-    #     # Now s[i].dim() == 2, a.dim() == 3
-    #     log_prob = []
-    #     for i in range(self.n_agent):
-    #         probs = self.actors[i](s[i])
-    #         log_prob.append(torch.log(torch.gather(probs, dim=-1, index=torch.select(a, dim=1, index=i).long())))
-    #     log_prob = torch.stack(log_prob, dim=1)
-    #     while log_prob.dim() < 3:
-    #         log_prob = log_prob.unsqueeze(-1)
-    #     return log_prob
-    #
-    # def _evalV(self, s):
-    #     # yyx：在这个函数中没找到DMPO论文的式9呀？在MultiCollect中~
-    #     # Requires input in shape [-1, n_agent, dim]
-    #     s = s.to(self.device)
-    #     # s变为有n_agent个元素的列表 且元素.shape = [-1, 邻域agent数量*dim]
-    #     # 各个agent的元素.shape不相同！因为邻域规模不同
-    #     # 得到的是s_{N_j}
-    #     s = self.g2a_embed_net(s)
-    #     values = []
-    #     for i in range(self.n_agent):
-    #         values.append(self.vs[i](s[i]))
-    #     # 填充后，values是有n_agent个元素的列表 元素.shape = (-1, 1)
-    #     # 得到的是V_j(s_{N_j}) 也即式(6)
-    #     return torch.stack(values, dim=1)
 
 
