@@ -116,7 +116,7 @@ def render_HTML(output_dir, tag='train', draw_snrth=False, traj_filename='eps_be
     for index, traj in enumerate(trajs.trajectories):
         name, color = get_name_color_by_index(index)
         features = traj_to_timestamped_geojson(index, traj, rm, poi_QoS, uav_num, color,
-                                               input_args, env_config, draw_snrth=True)
+                                               input_args, env_config, draw_snrth=False)  # True
 
         TimestampedGeoJson(  # 这里解注释了一个try except
             {

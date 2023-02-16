@@ -220,7 +220,7 @@ class EnvMobile():
             # 加一块“大三角形-三角形”的面积
             now_t = self.step_count * self.TIME_SLOT
             now_d = self.packet_num_in_queue[poi_id] * self.TIME_SLOT
-            self.poi_aoi[poi_id] += 1/2 * (now_t-(self.last_t[poi_id]-self.last_d[poi_id]))**2 + 1/2 * now_d**2
+            self.poi_aoi[poi_id] += 1/2 * (now_t-(self.last_t[poi_id]-self.last_d[poi_id]))**2 - 1/2 * now_d**2
             # 维护两个用于算poi_aoi的值
             self.last_t[poi_id] = now_t
             self.last_d[poi_id] = now_d

@@ -97,12 +97,13 @@ def traj_to_timestamped_geojson(index, trajectory, rm, poi_QoS, uav_num, color,
         if index < uav_num:  # UAV
             radius, opacity = 5, 1
         else:  # human
-            if input_args['fixed_range']:  # case1 fixed QoS
-                radius, opacity = 2, 1
-            else:  # case2 dyna QoS
-                # QoS = poi_QoS[index-uav_num][min(i, len(poi_QoS[1])-1)]  # 防止数组越界
-                # radius, opacity = (400 - QoS)/100 + 1, op['human']  # 将QoS的100~400映射到4~1
-                radius, opacity = 2, 1
+            radius, opacity = 2, 1
+            # if input_args['fixed_range']:  # case1 fixed QoS
+            #     radius, opacity = 2, 1
+            # else:  # case2 dyna QoS
+            #     # QoS = poi_QoS[index-uav_num][min(i, len(poi_QoS[1])-1)]  # 防止数组越界
+            #     # radius, opacity = (400 - QoS)/100 + 1, op['human']  # 将QoS的100~400映射到4~1
+            #     radius, opacity = 2, 1
 
         # for Point in GeoJSON type
         cur_coord = [row["geometry"].xy[0][0], row["geometry"].xy[1][0]]
