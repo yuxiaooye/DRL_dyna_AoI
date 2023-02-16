@@ -172,6 +172,7 @@ def parse_args():
     parser.add_argument('--use-mlp-model', action='store_true', help='将model改为最简单的mlp，仅用于DMPO')
     parser.add_argument('--multi-mlp', action='store_true', help='在model中分开预测obs中不同类别的信息，仅用于DMPO')
     # tune env
+
     ## setting
     parser.add_argument('--use-fixed-range', action='store_true')
     parser.add_argument('--snr', type=float, default=200)
