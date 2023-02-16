@@ -4,6 +4,7 @@ import numpy as np
 import itertools
 from gym.spaces import Box, Discrete
 import random
+import copy
 
 import torch
 import torch.nn as nn
@@ -719,6 +720,15 @@ class CategoricalActor(nn.Module):
         super().__init__()
         self.softmax = nn.Softmax(dim=-1)
         net_fn = net_args['network']
+        self.snrmap_features = net_args.get('snrmap_features',0)
+
+        if self.snrmap_features> 0:
+            net_args.sizes[0]-= self.snrmap_features
+            net_args.sizes[-1] = 32
+            snr_net_args = copy.deepcopy(net_args)
+            snr_net_args.sizes = [32+self.snrmap_features,32,9]
+            self.snr_network = net_fn(snr_net_args)
+
         self.network = net_fn(**net_args)
         self.eps = 1e-5
         # if pi becomes truely deterministic (e.g. SAC alpha = 0)
@@ -726,7 +736,12 @@ class CategoricalActor(nn.Module):
         # and make SAC compatible with "Hard"ActorCritic
 
     def forward(self, obs):
-        logit = self.network(obs)
+        # obs [B,S]
+        logit = self.network(obs[:,0:-self.snrmap_features])
+        if self.snrmap_features > 0:
+            snrmap = obs[:,-self.snrmap_features:]
+            logit = self.snr_network(torch.cat([logit,snrmap],dim=-1))
+
         probs = self.softmax(logit)
         probs = (probs + self.eps)
         probs = probs / probs.sum(dim=-1, keepdim=True)
