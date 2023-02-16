@@ -64,9 +64,10 @@ class Config(object):
             "user_data_amount": 1,  # 调环境：调高任务难度
 
             "collect_range": 500,
-            "rate_threshold": 0.05,
+            "rate_threshold": 5,  # TODO 重要，5Mbps作为tx satisfactory thresh
             "emergency_threshold": 100,
-            "emergency_reward_ratio": [0.5,0],
+            "bonus_reward_ratio": 0.2,
+            "emergency_reward_ratio": 0.2,
 
         }
 

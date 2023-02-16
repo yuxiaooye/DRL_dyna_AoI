@@ -101,8 +101,8 @@ def override(alg_args, run_args, input_args):
         run_args.name += f'_DataAmount={input_args.user_data_amount}'
     if input_args.update_num != 10:
         run_args.name += f'_UpdateNum={input_args.update_num}'
-    if input_args.use_fixed_range:
-        run_args.name += f'_FixedRange'
+    if not input_args.fixed_range:
+        run_args.name += f'_NotFixedRange'
     if input_args.uav_num != 3:
         run_args.name += f'_UAVNum={input_args.uav_num}'
     if not input_args.fixed_col_time:
@@ -145,7 +145,6 @@ def override(alg_args, run_args, input_args):
 
     return alg_args, run_args, input_args
 
-
 def parse_args():
     parser = argparse.ArgumentParser()
     # 已经验证这里的参数可被存入params.json
@@ -174,7 +173,7 @@ def parse_args():
     # tune env
 
     ## setting
-    parser.add_argument('--use-fixed-range', action='store_true')
+    parser.add_argument('--fixed-range', action='store_false')  # 重要，sensing range现在固定了
     parser.add_argument('--snr', type=float, default=200)
     parser.add_argument('--dyna_level', type=str, default='2', help='指明读取不同难度的poi_QoS.npy')
     parser.add_argument('--init_energy', type=float, default=719280)
@@ -183,6 +182,8 @@ def parse_args():
     parser.add_argument('--uav_num', type=int, default=3)
     parser.add_argument('--fixed-col-time', action='store_false')
     parser.add_argument('--amount_prop_to_SNRth', action='store_true')
+    ## 0216
+    parser.add_argument('--weighted_r', action='store_true')
     ## MDP
     parser.add_argument('--max_episode_step', type=int, default=120)
     parser.add_argument('--future_obs', type=int, default=0)
