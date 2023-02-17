@@ -29,21 +29,20 @@ class Roadmap():
                                                   Point(self.lower_left[0], self.upper_right[1]))
         except:
             # hardcode
-            if dataset == 'NCSU':
-                self.max_dis_y = 3255.4913305859623
-                self.max_dis_x = 2718.3945272795013
-            elif dataset == 'purdue':
+            if dataset == 'purdue':
                 self.max_dis_y = 1671.8995666382975
                 self.max_dis_x = 1221.4710883988212
+            elif dataset == 'NCSU':
+                self.max_dis_y = 3255.4913305859623
+                self.max_dis_x = 2718.3945272795013
+            elif dataset == 'KAIST':
+                self.max_dis_y = 2100.207579392558
+                self.max_dis_x = 2174.930950809533
             else: raise NotImplementedError
 
     def init_pois(self, max_episode_step=120):
         '''读df并处理表头'''
         poi_df = pd.read_csv(osp.join(project_dir, f'envs/{self.dataset}/human{max_episode_step}.csv'))
-        try:  # 如果df中有'pz'列, 删除它
-            poi_df.drop('pz', axis=1, inplace=True)
-        except:
-            pass
         assert poi_df.columns.to_list()[-2:] == ['px', 'py']
         '''将df转换为np.array'''
         poi_mat = np.expand_dims(poi_df[poi_df['id'] == 0].values[:, -2:], axis=0)  # idt
@@ -85,8 +84,8 @@ def get_map_props():
     }
     return map_props
 
-def traj_to_timestamped_geojson(index, trajectory, rm, poi_QoS, uav_num, color,
-                                input_args, env_config, draw_snrth=False):
+def traj_to_timestamped_geojson(index, trajectory, rm, uav_num, color,
+                                input_args, env_config, poi_QoS=None, draw_snrth=False):
 
     point_gdf = trajectory.df.copy()
     features = []

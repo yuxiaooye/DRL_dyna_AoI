@@ -33,8 +33,8 @@ def render_HTML(output_dir, tag='train', draw_snrth=False, traj_filename='eps_be
     poi_num = env_config['poi_num']
     max_episode_step = env_config['max_episode_step']
     dataset = input_args['dataset']
-    poi_QoS = np.load(os.path.join(f'envs/{dataset}', f"QoS{max_episode_step}/poi_QoS{input_args['dyna_level']}.npy"))
-    assert poi_QoS.shape == (poi_num, max_episode_step)
+    # poi_QoS = np.load(os.path.join(f'envs/{dataset}', f"QoS{max_episode_step}/poi_QoS{input_args['dyna_level']}.npy"))
+    # assert poi_QoS.shape == (poi_num, max_episode_step)
     rm = Roadmap(dataset, env_config)
 
     '''从output_dir中拿到轨迹'''
@@ -115,7 +115,7 @@ def render_HTML(output_dir, tag='train', draw_snrth=False, traj_filename='eps_be
 
     for index, traj in enumerate(trajs.trajectories):
         name, color = get_name_color_by_index(index)
-        features = traj_to_timestamped_geojson(index, traj, rm, poi_QoS, uav_num, color,
+        features = traj_to_timestamped_geojson(index, traj, rm, uav_num, color,
                                                input_args, env_config, draw_snrth=False)  # True
 
         TimestampedGeoJson(  # 这里解注释了一个try except

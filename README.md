@@ -47,6 +47,7 @@ python main_DPPO.py
 - `--debug`：开启debug模式，快速验证代码全流程无bug，将实验结果存入`runs/debug`路径
 - `--group foo`： 将实验结果存入`runs/foo`路径
 - `--algo foo`：选择使用算法foo
+- `--dataset foo`：选择使用数据集 foo 可选NCSU或KAIST
 - `--n_thread n`：设置多线程环境数为n，加速训练
 
 更多命令行参数的使用方式参见代码。

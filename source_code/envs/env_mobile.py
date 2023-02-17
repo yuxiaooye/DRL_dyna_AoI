@@ -79,11 +79,9 @@ class EnvMobile():
         # 每个时间步都生成一个包  # OK
         self.poi_arrival = np.ones((self.POI_NUM, self.MAX_EPISODE_STEP+1))  # 下标从0到120
 
-        # 权重在计算reward和metric时用到，先简化问题 不用权重
-        self.poi_weight = np.load(os.path.join(data_file_dir, 'poi_weights.npy'))[:self.POI_NUM]
-        self.poi_QoS = np.load(os.path.join(data_file_dir, f'QoS{self.MAX_EPISODE_STEP}/poi_QoS{self.input_args.dyna_level}.npy'))
+        # self.poi_QoS = np.load(os.path.join(data_file_dir, f'QoS{self.MAX_EPISODE_STEP}/poi_QoS{self.input_args.dyna_level}.npy'))
 
-        self.QoS_MAX, self.QoS_MIN = self.poi_QoS.max(), self.poi_QoS.min()
+        # self.QoS_MAX, self.QoS_MIN = self.poi_QoS.max(), self.poi_QoS.min()
 
         # 位置2 + aoi1
         self.poi_property_num = 2 + 1
@@ -266,10 +264,6 @@ class EnvMobile():
         return self.get_obs_from_outside(), uav_rewards, done, info
 
     def summary_info(self, info):
-        if self.WEIGHTED_MODE:
-            poi_weights = copy.deepcopy(self.poi_weight) / np.mean(self.poi_weight)  # 权重归一化
-        else:
-            poi_weights = [1 for _ in range(self.POI_NUM)]
         t_e = np.sum(np.sum(self.uav_energy_consuming_list))
 
         # mean_aoi的分子是图2黄色部分面积，分母是以秒为单位的总时间，除法后得到纵轴的标量，单位是s
@@ -491,7 +485,7 @@ class EnvMobile():
 
 
     def _get_snrmap(self, i):
-        # TODO 把snrmap也改为人群预测图
+        # TODO 把snrmap改为人群预测图
         snrmap = np.zeros((self.cell_num, self.cell_num))
 
         '''

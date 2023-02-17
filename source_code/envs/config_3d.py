@@ -27,12 +27,13 @@ class Config(object):
     def dataset_config(self):
         dataset = self.input_args.dataset
         if dataset == 'purdue':
-            self.dict['poi_num'] = 59
+            poi_num = 59
         elif dataset == 'NCSU':
-            self.dict['poi_num'] = 33
-        else:
-            raise NotImplementedError
-
+            poi_num = 33
+        elif dataset == 'KAIST':
+            poi_num = 92
+        else: raise NotImplementedError
+        self.dict['poi_num'] = poi_num
 
     def default_config(self):
         self.dict = {

@@ -87,7 +87,7 @@ def override(alg_args, run_args, input_args):
 
     '''yyx add begin'''
     timenow = datetime.strftime(datetime.now(), "%Y-%m-%d_%H-%M-%S")
-    run_args.name = '{}_{}'.format(timenow, agent_fn.__name__)
+    run_args.name = '{}_{}_{}'.format(timenow, input_args.dataset, agent_fn.__name__)
 
     # tune env
     ## setting
@@ -155,7 +155,7 @@ def parse_args():
     parser.add_argument('--env', type=str, default='Mobile')
     parser.add_argument('--algo', type=str, required=False, default='IPPO', help="algorithm(DMPO/IC3Net/CPPO/DPPO/IA2C/IPPO) ")
     parser.add_argument('--device', type=str, required=False, default='cuda:0', help="device(cpu/cuda:0/cuda:1/...) ")
-    parser.add_argument("--dataset", type=str, default='NCSU', choices=['NCSU'])
+    parser.add_argument("--dataset", type=str, default='NCSU', choices=['NCSU', 'KAIST'])
     # dirs
     parser.add_argument("--output_dir", type=str, default='runs/debug', help="which fold to save under 'runs/'")
     parser.add_argument('--group', type=str, default='debug', help='填写我对一组实验的备注，作用与wandb的group和tb的实验保存路径')
