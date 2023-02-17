@@ -207,10 +207,10 @@ class OnPolicyRunner:
                     self.dummy_env.save_trajs_2(
                         best_train_trajs[self.episode_reward.argmax()], phase='train', is_newbest=True)
 
-                self.logger.log(collect_ratio=sum(d['a_poi_collect_ratio'] for d in env_info) / len(env_info),
-                                violation_ratio=sum(d['b_emergency_violation_ratio'] for d in env_info) / len(env_info),
-                                episodic_aoi=sum(d['e_weighted_aoi'] for d in env_info) / len(env_info),
-                                energy_consuming_ratio=sum(d['h_energy_consuming_ratio'] for d in env_info) / len(env_info),
+                self.logger.log(episodic_aoi=sum(d['episodic_aoi'] for d in env_info) / len(env_info),
+                                aoi_satis_ratio=sum(d['aoi_satis_ratio'] for d in env_info) / len(env_info),
+                                tx_satis_ratio=sum(d['tx_satis_ratio'] for d in env_info) / len(env_info),
+                                energy_consuming_ratio=sum(d['energy_consuming_ratio'] for d in env_info) / len(env_info),
                                 )
                 '''执行env的reset'''
                 try:

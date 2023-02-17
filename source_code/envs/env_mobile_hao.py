@@ -45,8 +45,8 @@ class EnvMobileHao():
         self.UPDATE_NUM = self.config("update_num")
         self.COLLECT_RANGE = self.config("collect_range")
         self.POI_NUM = self.config("poi_num")
-        self.RATE_THRESHOLD = self.config("rate_threshold")
-        self.EMERGENCY_BAR = self.config("emergency_threshold")
+        self.RATE_THRESHOLD = self.config("RATE_THRESHOLD")
+        self.AoI_THRESHOLD = self.config("AoI_THRESHOLD")
         self.EMERGENCY_REWARD_RATIO = self.config("emergency_reward_ratio")
         self.UPDATE_USER_NUM = self.config("update_user_num")
         self.USER_DATA_AMOUNT = self.config("user_data_amount")
@@ -111,14 +111,13 @@ class EnvMobileHao():
         self.uav_data_collect = [[]
                                  for i in range(self.UAV_NUM)]
 
-        self.last_action = [[0, 0] for _ in range(self.UAV_NUM)]
         self.dead_uav_list = [False for i in range(self.UAV_NUM)]
 
         self.update_list = [[] for i in range(self.UAV_NUM)]
         self.collect_list = [[] for i in range(self.UAV_NUM)]
 
         self.poi_history = []  # episode结束后，长度为121
-        self.emergency_ratio_list = [0]
+        self.aoi_vio_ratio_list = [0]
         self.task_history = []
         self.aoi_history = [0]  # episode结束后，长度为241。为什么初始时要有一个0？
         self.area_aoi_history = [0]
@@ -227,7 +226,7 @@ class EnvMobileHao():
                 aoi = temp_time - self.poi_collect_time[i][-1]
             else:  # 数据未被收集，AoI根据y=x增长
                 aoi = temp_time
-            if aoi > self.EMERGENCY_BAR * self.TIME_SLOT:  # 超过了AoI阈值
+            if aoi > self.AoI_THRESHOLD * self.TIME_SLOT:  # 超过了AoI阈值
                 self.poi_emergency[i].append(1)
                 em_now += 1
                 em_penalty += 1  # penalty是常数1
@@ -241,7 +240,7 @@ class EnvMobileHao():
         })
         self.aoi_history.append(now_aoi / self.POI_NUM)
 
-        self.emergency_ratio_list.append(em_now / self.POI_NUM)  # 当前时间步有多少PoI违反了阈值
+        self.aoi_vio_ratio_list.append(em_now / self.POI_NUM)  # 当前时间步有多少PoI违反了阈值
 
         for u in range(self.UAV_NUM):  # reward中对于违反阈值的惩罚项
             uav_reward[u] -= (em_penalty / self.POI_NUM) * self.EMERGENCY_REWARD_RATIO
@@ -304,8 +303,7 @@ class EnvMobileHao():
                 self.POI_NUM * self.TOTAL_TIME * self.TIME_SLOT)
 
         info['a_poi_collect_ratio'] = float(collect_user / total_arrive_user)
-        info['b_emergency_violation_ratio'] = (np.sum(self.emergency_ratio_list) / self.step_count).item()  # 论文metric：violation ratio
-        info['c_emergency_time'] = (np.sum(self.emergency_ratio_list) * self.POI_NUM).item()
+        info['b_emergency_violation_ratio'] = (np.sum(self.aoi_vio_ratio_list) / self.step_count).item()  # 论文metric：violation ratio
         info['d_aoi'] = mean_aoi.item()
         info['e_weighted_aoi'] = weighted_mean_aoi.item()  # 论文metric：episodic-aoi
         info['f_weighted_bar_aoi'] = weighted_bar_aoi.item()
@@ -346,7 +344,6 @@ class EnvMobileHao():
 
     def _cal_uav_next_pos(self, uav_index, action):
         dx, dy = self._get_vector_by_action(int(action))  # 形如[1.5, 0]或[sqrt(1.5), sqrt(1.5)]
-        self.last_action[uav_index] = [dx, dy]
         distance = np.sqrt(np.power(dx * self.SCALE, 2) +  # SCALE = 100, 将1.5缩放为150米，无人机速度为20米/秒，即在一个timeslot里飞行用时7.5秒
                            np.power(dy * self.SCALE, 2))
         energy_consume = self._cal_energy_consuming(distance)

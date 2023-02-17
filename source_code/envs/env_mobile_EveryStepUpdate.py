@@ -46,8 +46,8 @@ class EnvMobileEveryStepUpdate():
         self.UPDATE_NUM = self.config("update_num")
         self.COLLECT_RANGE = self.config("collect_range")
         self.POI_NUM = self.config("poi_num")
-        self.RATE_THRESHOLD = self.config("rate_threshold")
-        self.EMERGENCY_BAR = self.config("emergency_threshold")
+        self.RATE_THRESHOLD = self.config("RATE_THRESHOLD")
+        self.AoI_THRESHOLD = self.config("AoI_THRESHOLD")
         self.EMERGENCY_REWARD_RATIO = self.config("emergency_reward_ratio")
         self.bonus_reward_ratio = self.config("bonus_reward_ratio")
         self.UPDATE_USER_NUM = self.config("update_user_num")
@@ -113,11 +113,10 @@ class EnvMobileEveryStepUpdate():
         self.uav_energy_consuming_list = [[]
                                           for i in range(self.UAV_NUM)]
 
-        self.last_action = [[0, 0] for _ in range(self.UAV_NUM)]
         self.dead_uav_list = [False for i in range(self.UAV_NUM)]
 
         self.poi_history = []  # episode结束后，长度为121
-        self.emergency_ratio_list = []
+        self.aoi_vio_ratio_list = []
         self.aoi_history = [0]  # episode结束后，长度为241。为什么初始时要有一个0？
 
         self.step_count = 0
@@ -253,7 +252,7 @@ class EnvMobileEveryStepUpdate():
         for i in range(self.POI_NUM):
             aoi = self.packet_num_in_queue[i]
             # print('aoi=', aoi)
-            if aoi > self.EMERGENCY_BAR:  # 超过了AoI阈值
+            if aoi > self.AoI_THRESHOLD:  # 超过了AoI阈值
                 em_now += 1
                 em_penalty += 1  # penalty是常数1
             now_aoi += aoi
@@ -264,7 +263,7 @@ class EnvMobileEveryStepUpdate():
             'aoi': np.array(aoi_list)
         })
         self.aoi_history.append(now_aoi / self.POI_NUM)
-        self.emergency_ratio_list.append(em_now / self.POI_NUM)  # 当前时间步有多少PoI违反了阈值
+        self.aoi_vio_ratio_list.append(em_now / self.POI_NUM)  # 当前时间步有多少PoI违反了阈值
 
         for u in range(self.UAV_NUM):  # reward中对于违反阈值的惩罚项，所有agent的惩罚值相同
             # 当前时刻违法AoIth的user的比例
@@ -300,8 +299,7 @@ class EnvMobileEveryStepUpdate():
         # ok
         info['a_poi_collect_ratio'] = float(1 - sum(self.packet_num_in_queue) / (self.POI_NUM*self.MAX_EPISODE_STEP))
         # ok
-        info['b_emergency_violation_ratio'] = (np.sum(self.emergency_ratio_list) / self.step_count).item()  # 论文metric：violation ratio
-        info['c_emergency_time'] = (np.sum(self.emergency_ratio_list) * self.POI_NUM).item()
+        info['b_emergency_violation_ratio'] = (np.sum(self.aoi_vio_ratio_list) / self.step_count).item()  # 论文metric：violation ratio
         info['d_aoi'] = mean_aoi.item()
         info['e_weighted_aoi'] = weighted_mean_aoi.item()  # 论文metric：episodic-aoi
         info['h_total_energy_consuming'] = t_e.item()
@@ -343,7 +341,6 @@ class EnvMobileEveryStepUpdate():
 
     def _cal_uav_next_pos(self, uav_index, action):
         dx, dy = self._get_vector_by_action(int(action))  # 形如[1.5, 0]或[sqrt(1.5), sqrt(1.5)]
-        self.last_action[uav_index] = [dx, dy]
         distance = np.sqrt(np.power(dx * self.SCALE, 2) +  # SCALE = 100, 将1.5缩放为150米，无人机速度为20米/秒，即在一个timeslot里飞行用时7.5秒
                            np.power(dy * self.SCALE, 2))
         energy_consume = self._cal_energy_consuming(distance)
