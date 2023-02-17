@@ -2,7 +2,7 @@ import os
 from numpy.core.numeric import indices
 from torch.distributions.normal import Normal
 from algorithms.utils import collect, mem_report
-from algorithms.models import GaussianActor, GraphConvolutionalModel, MLP, CategoricalActor
+from algorithms.models import GraphConvolutionalModel, MLP, CategoricalActor
 from tqdm.std import trange
 # from algorithms.algorithm import ReplayBuffer
 from gym.spaces.box import Box
@@ -13,7 +13,7 @@ from torch.optim import Adam
 import numpy as np
 import pickle
 from copy import deepcopy as dp
-from algorithms.models import CategoricalActor, EnsembledModel, SquashedGaussianActor, ParameterizedModel_MBPPO
+from algorithms.models import CategoricalActor
 import random
 import multiprocessing as mp
 # import torch.multiprocessing as mp

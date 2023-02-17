@@ -65,7 +65,8 @@ class EnvMobile():
         self.OBSTACLE = []
 
         self._get_energy_coefficient()
-        self.action_space = spaces.Discrete(9)  # 硬编码，跟昊宝的实现保持一致
+        # self.action_space = spaces.Discrete(9)
+        self.action_space = spaces.MultiDiscrete([9, 10])
 
         self.cell_num = 6
         self.cell_span_x = self.MAP_X / self.cell_num
@@ -300,7 +301,7 @@ class EnvMobile():
             pos2) == 2, 'cal_distance function only for 2d vector'
         distance = np.sqrt(
             np.power(pos1[0] - pos2[0], 2) + np.power(pos1[1] - pos2[1], 2)  # 这里算距离不要再*scale了~pos已经是以米为单位的距离了
-            + np.power(100, 2)  # uav飞行高度为100
+            + np.power(self.UAV_HEIGHT, 2)
         )
         return distance
 
@@ -309,7 +310,7 @@ class EnvMobile():
             pos2) == 2, 'cal_theta function only for 3d vector'
         r = np.sqrt(np.power(pos1[0] * self.SCALE - pos2[0] * self.SCALE, 2) + np.power(
             pos1[1] * self.SCALE - pos2[1] * self.SCALE, 2))
-        h = 100
+        h = self.UAV_HEIGHT
         theta = math.atan2(h, r)
         return theta
 
@@ -320,7 +321,7 @@ class EnvMobile():
 
     def _cal_uav_next_pos(self, uav_index, action):
         dx, dy = self._get_vector_by_action(int(action))  # 形如[1.5, 0]或[sqrt(1.5), sqrt(1.5)]
-        distance = np.sqrt(np.power(dx * self.SCALE, 2) +  # SCALE = 100, 将1.5缩放为150米，无人机速度为20米/秒，即在一个timeslot里飞行用时7.5秒
+        distance = np.sqrt(np.power(dx * self.SCALE, 2) +
                            np.power(dy * self.SCALE, 2))
         energy_consume = self._cal_energy_consuming(distance)
 

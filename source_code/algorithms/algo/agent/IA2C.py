@@ -9,7 +9,7 @@ import os
 from numpy.core.numeric import indices
 from torch.distributions.normal import Normal
 from algorithms.utils import collect, mem_report
-from algorithms.models import GaussianActor, GraphConvolutionalModel, MLP, CategoricalActor
+from algorithms.models import MLP, CategoricalActor
 from algorithms.algo.yyx_agent_base import YyxAgentBase
 from tqdm.std import trange
 # from algorithms.algorithm import ReplayBuffer
@@ -23,7 +23,7 @@ from torch.optim import Adam
 import numpy as np
 import pickle
 from copy import deepcopy as dp
-from algorithms.models import CategoricalActor, EnsembledModel, SquashedGaussianActor, ParameterizedModel_MBPPO
+from algorithms.models import CategoricalActor
 import random
 import multiprocessing as mp
 from torch import distributed as dist
@@ -58,7 +58,7 @@ class IA2C(nn.ModuleList, YyxAgentBase):
 
         self.observation_dim = agent_args.observation_dim
         self.action_space = agent_args.action_space
-        self.action_dim = self.action_space.n
+        self.action_dim = sum([dim.n for dim in self.action_space])
 
         # if adj diag is not one, we should add a eye matrix
         agent_args.adj = (torch.as_tensor(agent_args.adj, device=self.device, dtype=torch.float)>0) | torch.eye(self.n_agent, device=device).bool()
