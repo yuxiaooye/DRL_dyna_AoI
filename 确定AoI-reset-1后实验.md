@@ -1,22 +1,55 @@
-【2.17下午 在最新的场景上对比是否使用snrmap shortcut】
-
-G2ANet的shortcut暂时没跑通 有个维度的问题 问题不大
+- [x] [0217下午 tune是否使用snrmap]
 
 ```sh
 # !/bin/sh
+source activate yyx_adept
+group='0217-local-ummap'
+nohup python -u main_DPPO.py --group ${group} --aoith 60 --n_thread 16 --device cuda:3 &
+nohup python -u main_DPPO.py --group ${group} --aoith 60 --use_snrmap --n_thread 16 --device cuda:3 &
+nohup python -u main_DPPO.py --group ${group} --aoith 60 --use_snrmap --use_snrmap_shortcut --n_thread 16 --device cuda:3 &
+```
+
+
+
+- [ ] [0217晚上 不同算法]
+
+aoith=60 bonus-ratio=0
+
+```shell
+# !/bin/sh
 source activate yyx_ishen
-group='0217-snrmap-shortcut'
-nohup_dir='../nohup_log'
-mkdir -p ${nohup_dir}
-for algo in IPPO DPPO;
+group='0217-algos'
+for algo in IPPO DPPO G2ANet;
 do
-nohup python -u main_DPPO.py --group ${group} --use-old-env --use_snrmap --algo ${algo} --dyna_level 4 --update_num 5 --user_data_amount 5 --device cuda:4 >> ${nohup_dir}/0216.log 2>&1 &
-nohup python -u main_DPPO.py --group ${group} --use-old-env --use_snrmap --use_snrmap_shortcut --algo ${algo} --dyna_level 4 --update_num 5 --user_data_amount 5 --device cuda:4 >> ${nohup_dir}/0216.log 2>&1 &
+nohup python -u main_DPPO.py --group ${group} --algo ${algo} --n_thread 16 --device cuda:4 &
 done
 ```
 
 
 
+- [ ] [0217晚上 不同的AoIth取值（类似五点图）]
+
+aoith=60 bonus-ratio=0
+
+```shell
+# !/bin/sh
+source activate yyx_ishen
+group='0217-adjust-aoith'
+for aoith in 60 50 40 30;
+do
+nohup python -u main_DPPO.py --group ${group} --aoith ${aoith} --n_thread 16 --device cuda:7 &
+done
+```
 
 
-![image-20230217154345883](https://cdn.jsdelivr.net/gh/1candoallthings/figure-bed@main/img/202302171543967.png)
+
+[0217晚上 现在episodic-aoi太大了 把uav高度调低]
+
+aoith=60 这个实验开始加上了tx satis ratio的奖励scale
+
+
+
+
+
+
+

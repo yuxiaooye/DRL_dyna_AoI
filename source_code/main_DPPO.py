@@ -22,7 +22,6 @@ def getRunArgs(input_args):
     run_args = Config()
     run_args.device = input_args.device
 
-
     '''yyx add start'''
     run_args.debug = input_args.debug
     run_args.test = input_args.test
@@ -33,7 +32,6 @@ def getRunArgs(input_args):
 
     run_args.radius_v = 1
     run_args.radius_pi = 1
-
 
     run_args.start_step = 0
     run_args.save_period = 1800  # in seconds
@@ -56,9 +54,7 @@ def initAgent(logger, device, agent_args, input_args):
     return agent_fn(logger, device, agent_args, input_args)
 
 
-
 def override(alg_args, run_args, input_args, env):
-
     if input_args.use_snrmap_shortcut:
         # snr features数量， 直接shortcut到策略前一层，0代表不跳过
         alg_args.agent_args.pi_args.snrmap_features = env.cell_num * env.cell_num
@@ -112,7 +108,7 @@ def override(alg_args, run_args, input_args, env):
         run_args.name += f'_NotFixedColTime'
     if input_args.amount_prop_to_SNRth:
         run_args.name += f'_AmountPropToSNRth'
-    if input_args.aoith != 100:
+    if input_args.aoith != 60:
         run_args.name += f'_AoIth={input_args.aoith}'
 
     ## MDP
@@ -149,13 +145,14 @@ def override(alg_args, run_args, input_args, env):
 
     return alg_args, run_args, input_args
 
+
 def parse_args():
     parser = argparse.ArgumentParser()
     # 已经验证这里的参数可被存入params.json
 
     parser.add_argument('--debug', action='store_true', default=False, )
     parser.add_argument('--test', action='store_true', default=False, )
-    parser.add_argument('--user',type=str,default='yyx' )
+    parser.add_argument('--user', type=str, default='yyx')
     parser.add_argument('--env', type=str, default='Mobile')
     parser.add_argument('--algo', type=str, required=False, default='IPPO', help="algorithm(DMPO/IC3Net/CPPO/DPPO/IA2C/IPPO) ")
     parser.add_argument('--device', type=str, required=False, default='cuda:0', help="device(cpu/cuda:0/cuda:1/...) ")
@@ -186,7 +183,7 @@ def parse_args():
     parser.add_argument('--uav_num', type=int, default=3)
     parser.add_argument('--fixed-col-time', action='store_false')
     parser.add_argument('--amount_prop_to_SNRth', action='store_true')
-    parser.add_argument('--aoith', default=100, type=int)
+    parser.add_argument('--aoith', default=60, type=int)
     ## 0216
     parser.add_argument('--weighted_r', action='store_true')
     ## MDP
@@ -205,7 +202,9 @@ def parse_args():
 
     return args
 
+
 input_args = parse_args()
+
 
 def record_input_args(input_args, env_args, output_dir):
     params = dict()
@@ -236,14 +235,16 @@ elif input_args.algo == 'IPPO':
 
 if input_args.env == 'Mobile':
     from envs.env_mobile import EnvMobile
+
     env_fn_train, env_fn_test = EnvMobile, EnvMobile
 elif input_args.env == 'MobileHao':
     from envs.env_mobile_hao import EnvMobileHao
+
     env_fn_train, env_fn_test = EnvMobileHao, EnvMobileHao
 elif input_args.env == 'MobileEveryStepUpdate':
     from envs.env_mobile_EveryStepUpdate import EnvMobileEveryStepUpdate
-    env_fn_train, env_fn_test = EnvMobileEveryStepUpdate, EnvMobileEveryStepUpdate
 
+    env_fn_train, env_fn_test = EnvMobileEveryStepUpdate, EnvMobileEveryStepUpdate
 
 env_args = {  # 这里环境类的参数抄昊宝
     "emergency_threshold": 100,
@@ -265,9 +266,9 @@ alg_args, run_args, input_args = override(alg_args, run_args, input_args, dummy_
 record_input_args(input_args, env_args, run_args.output_dir)
 
 from env_configs.wrappers.env_wrappers import SubprocVecEnv
+
 envs_train = SubprocVecEnv([env_fn_train(env_args, input_args, phase='train') for _ in range(input_args.n_thread)])
 envs_test = SubprocVecEnv([env_fn_test(env_args, input_args, phase='test') for _ in range(1)])
-
 
 os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3,4,5,6,7'
 
@@ -277,8 +278,9 @@ logger = LogClient(logger)
 agent = initAgent(logger, run_args.device, alg_args.agent_args, input_args)
 
 import time
+
 start = time.time()
 OnPolicyRunner(logger=logger, agent=agent, envs_learn=envs_train, envs_test=envs_test, dummy_env=dummy_env,
                run_args=run_args, alg_args=alg_args, input_args=input_args).run()
 end = time.time()
-print(f'OK! 用时{end-start}秒')
+print(f'OK! 用时{end - start}秒')

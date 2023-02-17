@@ -117,7 +117,9 @@ class EnvMobile():
         # 监视下面三个reward乘上ratio之前的尺度
         self.aoi_reward_list = []
         self.bonus_reward_list = []
-        self.penalty_reward_list = []
+        self.aoipenalty_reward_list = []
+        self.txpenalty_reward_list = []
+
 
 
         self.aoi_history = [0]  # episode结束后，长度为121。为什么初始时要有一个0？
@@ -201,15 +203,14 @@ class EnvMobile():
             for poi_id, rate in access_list:
                 sum_rates[poi_id] += rate
 
-        visit_num = sum(sum_rates > 0)
-        if visit_num != 0:
-            satis_ratio = sum(sum_rates >= self.RATE_THRESHOLD) / visit_num  # 不统计没被访问的poi，所以分子不是POI_NUM
-            self.tx_satis_ratio_list.append(satis_ratio)
+
         ## 若poi的总data rate满足阈值，则更新aoi
+
         uav_rewards = np.zeros(self.UAV_NUM)
         for poi_id, sum_rate in enumerate(sum_rates):
-            if sum_rate < self.RATE_THRESHOLD: # 不满足阈值
-                continue
+            if sum_rate < self.RATE_THRESHOLD:
+                continue  # 不满足阈值
+
             ## aoi reset
             before_reset = self.poi_aoi[poi_id]
             self.poi_aoi[poi_id] = 0  # 戴总是reset到1，不过我后面会在check_arrival()里+=1，和戴总的等价
@@ -228,12 +229,12 @@ class EnvMobile():
                         uav_rewards[uav_id] += r
                         self.aoi_reward_list.append(r)
                         rate_contribute_to_that_poi[uav_id] = rate
-            if np.all(rate_contribute_to_that_poi < self.RATE_THRESHOLD):
-                # 如果仅靠每个uav自己都不足以达到阈值 则给这些uav一个bonus奖励
-                bonus_r = (rate_contribute_to_that_poi > 0) * self.bonus_reward_ratio
-                self.bonus_reward_list.extend((bonus_r/self.bonus_reward_ratio).tolist())
-                uav_rewards += bonus_r
 
+        visit_num = sum(sum_rates > 0)
+        if visit_num != 0:
+            satis_ratio = sum(sum_rates >= self.RATE_THRESHOLD) / visit_num  # 不统计没被访问的poi，所以分子不是POI_NUM
+            self.tx_satis_ratio_list.append(satis_ratio)
+            uav_rewards *= satis_ratio  # 把aoi的收集奖励根据tx satis ratio scale一下
 
         done = self._is_episode_done()
         if not done:
@@ -261,7 +262,7 @@ class EnvMobile():
         # 惩罚基于当前时刻违反AoIth的user的比例，所有uav的惩罚相同
         if em_now != 0:
             penalty_r = -np.ones(self.UAV_NUM) * (em_now / self.POI_NUM) * self.aoi_vio_penalty_ratio
-            self.penalty_reward_list.extend((penalty_r/self.aoi_vio_penalty_ratio).tolist())
+            self.aoipenalty_reward_list.extend((penalty_r/self.aoi_vio_penalty_ratio).tolist())
             uav_rewards += penalty_r
 
         '''step3. episode结束时的后处理'''
@@ -289,8 +290,8 @@ class EnvMobile():
         info['energy_consuming_ratio'] = t_e / (self.UAV_NUM * self.INITIAL_ENERGY)  # metric4 OK
 
         info['aoi_reward'] = np.mean(self.aoi_reward_list)
-        info['bonus_reward'] = np.mean(self.penalty_reward_list) if len(self.penalty_reward_list) != 0 else 0
-        info['penalty_reward'] = np.mean(self.penalty_reward_list)
+        info['bonus_reward'] = np.mean(self.bonus_reward_list) if len(self.bonus_reward_list) != 0 else 0
+        info['penalty_reward'] = np.mean(self.aoipenalty_reward_list) if len(self.aoipenalty_reward_list) != 0 else 0
 
         if self.debug or self.test:
             print(f""
