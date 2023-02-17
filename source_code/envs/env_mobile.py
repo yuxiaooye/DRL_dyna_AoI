@@ -49,7 +49,7 @@ class EnvMobile():
         self.POI_NUM = self.config("poi_num")
         self.RATE_THRESHOLD = self.config("RATE_THRESHOLD")
         self.AoI_THRESHOLD = self.config("AoI_THRESHOLD")
-        self.EMERGENCY_REWARD_RATIO = self.config("emergency_reward_ratio")
+        self.aoi_vio_penalty_ratio = self.config("aoi_vio_penalty_ratio")
         self.bonus_reward_ratio = self.config("bonus_reward_ratio")
         self.UPDATE_USER_NUM = self.config("update_user_num")
         self.USER_DATA_AMOUNT = self.config("user_data_amount")
@@ -251,7 +251,7 @@ class EnvMobile():
 
         for u in range(self.UAV_NUM):  # reward中对于违反阈值的惩罚项，所有agent的惩罚值相同
             # 当前时刻违法AoIth的user的比例
-            uav_rewards[u] -= (em_now / self.POI_NUM) * self.EMERGENCY_REWARD_RATIO
+            uav_rewards[u] -= (em_now / self.POI_NUM) * self.aoi_vio_penalty_ratio
 
         '''step3. episode结束时的后处理'''
         info = {}

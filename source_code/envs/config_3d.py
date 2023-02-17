@@ -42,8 +42,7 @@ class Config(object):
             "action_root": 13,
             "dataset": "NCSU",
             "max_episode_step": 120,  # 适配NCSU中的human.csv~~
-            "add_emergency": False,
-            "weighted_mode": False,  # 先尽量简化问题。本想让weight反比于SNRth，但随着时间在变，不方便~
+            "weighted_mode": False,
             "poi_visible_num": -1,
 
             "scale": 100,
@@ -64,10 +63,10 @@ class Config(object):
             "user_data_amount": 1,  # 调环境：调高任务难度
 
             "collect_range": 500,
-            "RATE_THRESHOLD": 5,  # 关键
+            "RATE_THRESHOLD": 5,  # 关键 Mbps
             "AoI_THRESHOLD": 100,  # 关键
             "bonus_reward_ratio": 0.2,
-            "emergency_reward_ratio": 0.2,
+            "aoi_vio_penalty_ratio": 0.2,
 
         }
 
