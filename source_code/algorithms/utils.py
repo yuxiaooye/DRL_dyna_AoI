@@ -444,11 +444,17 @@ class LogServer(object):
         self.run_args, self.algo_args, self.input_args = run_args, algo_args, input_args
         self.name = run_args.name  # 实验名字，包括超参数后缀的yyx经常用的那个
         self.mute = run_args.debug or run_args.mute_wandb  # wandb太慢，debug时不用
+        if input_args.user=='wh':
+            key = '4005a92bfae3a8351f46946688fba35856fe6d79'
+            entity = 'wh'
+        elif input_args.user=='yyx':
+            key = '109d34efac30067df641a402ad8c505d5b80970f'
+            entity = 'michaelye'
         if not self.mute:
             '''wandb'''
-            wandb.login(key='109d34efac30067df641a402ad8c505d5b80970f')  # login to my own account first
+            wandb.login(key=key)  # login to my own account first
             run = wandb.init(
-                entity="michaelye",
+                entity=entity,
                 project=input_args.env,
                 config={"run_args": run_args._toDict(recursive=True),
                         "algo_args": algo_args._toDict(recursive=True),
