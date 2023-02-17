@@ -211,6 +211,9 @@ class OnPolicyRunner:
                                 aoi_satis_ratio=sum(d['aoi_satis_ratio'] for d in env_info) / len(env_info),
                                 tx_satis_ratio=sum(d['tx_satis_ratio'] for d in env_info) / len(env_info),
                                 energy_consuming_ratio=sum(d['energy_consuming_ratio'] for d in env_info) / len(env_info),
+                                aoi_reward=sum(d['aoi_reward'] for d in env_info) / len(env_info),
+                                bonus_reward=sum(d['bonus_reward'] for d in env_info) / len(env_info),
+                                penalty_reward=sum(d['penalty_reward'] for d in env_info) / len(env_info),
                                 )
                 '''执行env的reset'''
                 try:

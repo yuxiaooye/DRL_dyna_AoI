@@ -735,4 +735,3 @@ class EnvMobileHao():
         if is_newbest:
             from tools.post.vis import render_HTML
             render_HTML(self.input_args.output_dir, tag=phase)
-            print('call vis.gif along with the training')

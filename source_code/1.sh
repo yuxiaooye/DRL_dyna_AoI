@@ -1,6 +1,6 @@
-source activate yyx_ishen
-group='0217-first'
-for algo in IPPO DPPO G2ANet;
+source activate yyx_adept
+group='0217-first-bonus-ratio=0'
+for algo in IPPO;
 do
-nohup python -u main_DPPO.py --group ${group} --dataset KAIST --algo ${algo} --device cuda:2 &
+nohup python -u main_DPPO.py --group ${group} --algo ${algo} --n_thread 16 --device cuda:4 &
 done

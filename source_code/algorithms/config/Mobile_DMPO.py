@@ -90,10 +90,6 @@ def getArgs(radius_v, radius_pi, env, input_args=None):
     # pi_args.sizes = [-1, 64, 64, agent_args.action_space.n]
     pi_args.sizes = [-1, 64, 64, 9]  # 9是硬编码的离散动作数
     pi_args.squash = False
-    if input_args is not None and input_args.use_snrmap_shortcut:
-        pi_args.snrmap_features = env.cell_num * env.cell_num  # snr features数量， 直接shortcut到策略前一层，0代表不跳过
-    else:
-        pi_args.snrmap_features = 0
     agent_args.pi_args = pi_args
 
     alg_args.agent_args = agent_args

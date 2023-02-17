@@ -73,7 +73,7 @@ class EnvMobile():
 
         '''these mat is **read-only** 因此可以放在init中 而不必放在reset中每次episode开始时都读'''
         self.poi_mat = self.rm.init_pois(self.MAX_EPISODE_STEP)
-        data_file_dir = f'envs/{self.input_args.dataset}'
+
 
         # self.poi_arrival = np.load(os.path.join(data_file_dir, 'arrival.npy'))[:self.POI_NUM, :self.MAX_EPISODE_STEP + 1]  # shape = (33, 121)，其中33是poi数，121是episode的时间步数
         # 每个时间步都生成一个包  # OK
@@ -114,6 +114,12 @@ class EnvMobile():
         self.poi_history = []  # episode结束后，长度为121
         self.aoi_vio_ratio_list = []  # 当前时间步有多大比例的PoI违反了aoi阈值
         self.tx_satis_ratio_list = []  # 当前时间步有多大比例的被服务aoi满足了data rate阈值
+        # 监视下面三个reward乘上ratio之前的尺度
+        self.aoi_reward_list = []
+        self.bonus_reward_list = []
+        self.penalty_reward_list = []
+
+
         self.aoi_history = [0]  # episode结束后，长度为121。为什么初始时要有一个0？
 
         self.step_count = 0
@@ -211,18 +217,23 @@ class EnvMobile():
             ## 计算poi_aoi_area
             self.poi_aoi_area[poi_id] += 1/2 * (before_reset * self.TIME_SLOT)**2  # 加一块三角形的面积
 
-            ## 计算aoi reset reward和bonus reward  # TODO 这里看下当年戴总的reward定义
+            ## 计算aoi reset reward和bonus reward
+            # 当年戴总infocom2022的定义是收集前平均aoi减收集后平均aoi，和现在我用的一致
             rate_contribute_to_that_poi = np.zeros(self.UAV_NUM)
             for uav_id, access_list in enumerate(access_lists):
                 for pid, rate in access_list:
                     if poi_id == pid:
                         # 收集aoi越大的user，奖励越大；rate/sum_rate相当于credit assignment
-                        r = before_reset * rate / sum_rate  # TODO reward的尺度需要调整合理
-                        uav_rewards[uav_id] += r / self.MAX_EPISODE_STEP
+                        r = (before_reset / self.MAX_EPISODE_STEP) * (rate / sum_rate)
+                        uav_rewards[uav_id] += r
+                        self.aoi_reward_list.append(r)
                         rate_contribute_to_that_poi[uav_id] = rate
             if np.all(rate_contribute_to_that_poi < self.RATE_THRESHOLD):
-                # 如果仅靠每个uav自己都不足以达到阈值 则给一个bonus奖励
-                uav_rewards += np.ones(self.UAV_NUM) * self.bonus_reward_ratio
+                # 如果仅靠每个uav自己都不足以达到阈值 则给这些uav一个bonus奖励
+                bonus_r = (rate_contribute_to_that_poi > 0) * self.bonus_reward_ratio
+                self.bonus_reward_list.extend((bonus_r/self.bonus_reward_ratio).tolist())
+                uav_rewards += bonus_r
+
 
         done = self._is_episode_done()
         if not done:
@@ -247,9 +258,11 @@ class EnvMobile():
         self.aoi_history.append(now_aoi / self.POI_NUM)
         self.aoi_vio_ratio_list.append(em_now / self.POI_NUM)
 
-        for u in range(self.UAV_NUM):  # reward中对于违反阈值的惩罚项，所有agent的惩罚值相同
-            # 当前时刻违法AoIth的user的比例
-            uav_rewards[u] -= (em_now / self.POI_NUM) * self.aoi_vio_penalty_ratio
+        # 惩罚基于当前时刻违反AoIth的user的比例，所有uav的惩罚相同
+        if em_now != 0:
+            penalty_r = -np.ones(self.UAV_NUM) * (em_now / self.POI_NUM) * self.aoi_vio_penalty_ratio
+            self.penalty_reward_list.extend((penalty_r/self.aoi_vio_penalty_ratio).tolist())
+            uav_rewards += penalty_r
 
         '''step3. episode结束时的后处理'''
         info = {}
@@ -274,7 +287,10 @@ class EnvMobile():
         info['aoi_satis_ratio'] = sum(1 - np.array(self.aoi_vio_ratio_list)) / self.step_count  # metric2 OK
         info['tx_satis_ratio'] = sum(self.tx_satis_ratio_list) / len(self.tx_satis_ratio_list)  # metric3 OK
         info['energy_consuming_ratio'] = t_e / (self.UAV_NUM * self.INITIAL_ENERGY)  # metric4 OK
-        info['episode_step'] = self.step_count
+
+        info['aoi_reward'] = np.mean(self.aoi_reward_list)
+        info['bonus_reward'] = np.mean(self.penalty_reward_list) if len(self.penalty_reward_list) != 0 else 0
+        info['penalty_reward'] = np.mean(self.penalty_reward_list)
 
         if self.debug or self.test:
             print(f""
@@ -434,7 +450,7 @@ class EnvMobile():
         return obs_dict
 
     def get_obs_agent(self, agent_id):
-        # TODO aoi退化为G-A-W 不需要这么多信息了
+        # aoi退化为G-A-W 删除了obs的很多维度
         obs = []
         for i in range(self.UAV_NUM):  # uav的位置信息
             if i == agent_id:
@@ -476,7 +492,7 @@ class EnvMobile():
 
         # snrmap的信息
         if self.USE_SNRMAP:
-            obs.extend(self._get_snrmap(i))
+            obs.extend(self._get_snrmap(agent_id))
 
         # 把当前的step_count也喂到obs中
         obs.append(self.step_count / self.MAX_EPISODE_STEP)
@@ -484,37 +500,30 @@ class EnvMobile():
         return obs
 
 
-    def _get_snrmap(self, i):
-        # TODO 把snrmap改为人群预测图
-        snrmap = np.zeros((self.cell_num, self.cell_num))
+    def _get_snrmap(self, uav_id):
+        snrmap = np.zeros((self.cell_num, self.cell_num))  # 已将snrmap改为人群预测图
 
+        # map部分可观测，根据uav位置确定哪些格子是可观测的
+        visible = np.zeros((self.cell_num, self.cell_num))
+        for i in range(self.cell_num):
+            for j in range(self.cell_num):
+                center = ((i+1/2)*self.cell_span_x, (j+1/2)*self.cell_span_y)
+                if self._cal_distance(center, self.uav_position[uav_id]) < self.agent_field:
+                    visible[i][j] = 1
+                else:
+                    visible[i][j] = 0
 
         # 要的是下一步user的位置，所以+1
         next_poi_positions = copy.deepcopy(self.poi_mat[:, min(self.step_count+1, self.poi_mat.shape[1]-1), :])  # 终止状态越界，取min
-        # 如果更精细地做，poi_value也应该是用下一时刻的，不过当前时刻新产生的包大概率也不会被下一时刻的无人机收集到（因为FIFO），所以先不做
         for poi_index, next_poi_position in enumerate(next_poi_positions):
-            # if len(self.poi_value[poi_index]) == 0: continue  # 队列中没包的条件是len为0吗？
-            # d_min = float('inf')
-            # for uav_index in range(self.n_agents):
-            #     d = self._cal_distance(next_poi_position, self.uav_position[uav_index])
-            #     d_min = min(d, d_min)
-            # if self.input_args.fixed_range:
-            #     next_SNRth = self.COLLECT_RANGE
-            # else:  # self.step_count-1是当前的阈值，这里要的是下一步的阈值，所以不-1
-            #     next_SNRth = self.poi_QoS[poi_index][self.step_count]
-            # # ans反映一个poi的需求没被满足的gap，物理意义是uav应该朝着ans大的cell移动
-            # # 一方面，d_min越大，说明当前没有无人机靠近该user
-            # # 另一方面，mext_SNRth越小，说明无人机必须很接近该user才能meet his/her requirement
-            # # 如果已经有无人机在收集范围内，ans置为0
-            # ans = max(d_min - next_SNRth, 0)
             x, y = next_poi_position
             i = np.clip(int(x/self.cell_span_x), 0, self.cell_num-1)
             j = np.clip(int(y/self.cell_span_y), 0, self.cell_num-1)
-            snrmap[i][j] += 1  # 根据用户位置把ans加到具体的cell中
+            if visible[i][j]:
+                snrmap[i][j] += 1  # 根据用户位置把ans加到具体的cell中
 
         snrmap = snrmap / self.POI_NUM  # 归一化
         snrmap = snrmap.reshape(self.cell_num * self.cell_num, )
-        # TODO 目前的实现是全局snr-map 后面改成每个uav各自部分可观
         return snrmap.tolist()
 
 
