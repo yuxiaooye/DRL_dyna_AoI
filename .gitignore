@@ -5,3 +5,4 @@ wandb/
 nohup_log/
 *backup
 *.sh
+*.pyc
