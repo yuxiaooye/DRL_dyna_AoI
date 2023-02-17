@@ -66,7 +66,7 @@ class EnvMobile():
 
         self._get_energy_coefficient()
         # self.action_space = spaces.Discrete(9)
-        self.action_space = spaces.MultiDiscrete([9, 10])
+        self.action_space = spaces.MultiDiscrete([9, 9])
 
         self.cell_num = 6
         self.cell_span_x = self.MAP_X / self.cell_num
@@ -176,6 +176,8 @@ class EnvMobile():
 
 
     def step(self, action):
+        action = [item[0] for item in action]  # TODO DASAP
+
         # 若max_episode_step=120, 则执行120次step方法。episode结束时保存120个poi和uav的位置点，而不是icde的121个，把poi、uav的初始位置扔掉！
         self.step_count += 1
 

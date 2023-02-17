@@ -18,12 +18,16 @@ from torch.optim import Adam
 # from .base_util import batch_to_seq, init_layer, one_hot
 
 
-def MLP(sizes, activation=nn.ReLU, output_activation=nn.Identity, **kwargs):
+def MLP(sizes, activation=nn.ReLU, output_activation=nn.Identity, have_last_branch=True, **kwargs):
     layers = []
     for j in range(len(sizes) - 1):
-        act = activation if j < len(sizes) - 2 else output_activation
+        if have_last_branch:
+            act = activation if j < len(sizes) - 2 else output_activation
+        else:
+            act = activation
         layers += [nn.Linear(sizes[j], sizes[j + 1]), act()]
     return nn.Sequential(*layers)
+
 
 
 
@@ -314,7 +318,7 @@ class CategoricalActor(nn.Module):
     def __init__(self, **net_args):
         super().__init__()
         self.softmax = nn.Softmax(dim=-1)
-        net_fn = net_args['network']
+        net_fn = net_args['network']  # MLP
         self.snrmap_features = net_args.get('snrmap_features', 0)
 
         if self.snrmap_features > 0:
@@ -322,28 +326,32 @@ class CategoricalActor(nn.Module):
             net_args['sizes'][-1] = 32
             snr_net_args = copy.deepcopy(net_args)
             snr_net_args['sizes'] = [32 + self.snrmap_features, 32, 9]
+            # TODO 如果要引入新网络，snr_network其实没必要那么多层；更好的方式是直接concat到embedding_before_branch
             self.snr_network = net_fn(**snr_net_args)
 
         self.network = net_fn(**net_args)
+        self.branch1 = nn.Linear(net_args['sizes'][-1], net_args['branchs'][0])
+        self.branch2 = nn.Linear(net_args['sizes'][-1], net_args['branchs'][1])
         self.eps = 1e-5
         # if pi becomes truely deterministic (e.g. SAC alpha = 0)
         # q will become NaN, use eps to increase stability 
         # and make SAC compatible with "Hard"ActorCritic
 
-    def forward(self, obs):
+    def forward(self, obs):  # 多维度动作确认OK
         # obs [B,S]
         if self.snrmap_features > 0:
-            logit = self.network(obs[:, 0:-self.snrmap_features])
+            x = self.network(obs[:, 0:-self.snrmap_features])
             snrmap = obs[:, -self.snrmap_features:]
-            logit = self.snr_network(torch.cat([logit, snrmap], dim=-1))
+            embed = self.snr_network(torch.cat([x, snrmap], dim=-1))
         else:
             assert self.snrmap_features == 0
-            logit = self.network(obs)
+            embed = self.network(obs)
 
-        probs = self.softmax(logit)
-        probs = (probs + self.eps)
+        logit1, logit2 = self.branch1(embed), self.branch2(embed)
+        logits = torch.stack([logit1, logit2], dim=1)
+        probs = self.softmax(logits) + self.eps
         probs = probs / probs.sum(dim=-1, keepdim=True)
-        return probs
+        return probs  # shape = (-1, 2, 9) 其中2是动作维度数
 
 
 

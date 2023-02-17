@@ -118,11 +118,11 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
             probs = []
             for i in range(self.n_agent):
                 probs.append(self.actors[i](self.s_for_agent(s, i)))
-            probs = torch.stack(probs, dim=1)  # shape = (-1, NUM_AGENT, act_dim)
+            probs = torch.stack(probs, dim=1)  # shape = (-1, NUM_AGENT, 2, act_dim)
             return Categorical(probs)
 
     def get_logp(self, s, a):
-        """
+        """  # TODO NEXT change here
         Requires input of [batch_size, n_agent, dim] or [n_agent, dim].
         Returns a tensor whose dim() == 3.
         """
@@ -139,7 +139,9 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
         log_prob = []
         for i in range(self.n_agent):
             probs = self.actors[i](self.s_for_agent(s, i))
-            log_prob.append(torch.log(torch.gather(probs, dim=-1, index=torch.select(a, dim=1, index=i).long())))
+            index = torch.select(a, dim=1, index=i).long()
+            ans = torch.log(torch.gather(probs, dim=-1, index=index.unsqueeze(-1)))
+            log_prob.append(ans.squeeze(-1))
         log_prob = torch.stack(log_prob, dim=1)
         while log_prob.dim() < 3:
             log_prob = log_prob.unsqueeze(-1)
@@ -201,9 +203,9 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
                     [batch_state, batch_action, batch_logp, batch_advantages_old] = [item[idxs] for item in [batch_state, batch_action, batch_logp, batch_advantages_old]]
                 batch_logp_new = self.get_logp(batch_state, batch_action)
 
-                logp_diff = batch_logp_new - batch_logp
-                kl = logp_diff.mean()
-                ratio = torch.exp(batch_logp_new - batch_logp)
+                logp_diff = batch_logp_new.sum(-1, keepdim=True) - batch_logp.sum(-1, keepdim=True)
+                kl = logp_diff.mean()  # 这里魔改的，不一定对
+                ratio = torch.exp(logp_diff)
                 surr1 = ratio * batch_advantages_old
                 surr2 = ratio.clamp(1 - clip, 1 + clip) * batch_advantages_old
                 loss_surr = torch.min(surr1, surr2).mean()

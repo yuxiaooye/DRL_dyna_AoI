@@ -73,7 +73,9 @@ def getArgs(radius_v, radius_pi, env, input_args=None):
     pi_args.network = MLP
     pi_args.activation = torch.nn.ReLU
     # TODO NEXT 尝试 最后分两个head 分别输出两个离散动作维度上9个选择、10个选择的概率分布
-    pi_args.sizes = [-1, 64, 64, [env.action_space[0].n, env.action_space[1].n]]
+    pi_args.sizes = [-1, 64, 64]  # 9是硬编码的离散动作数
+    pi_args.branchs = [env.action_space[0].n, env.action_space[1].n]
+    pi_args.have_last_branch = False
     pi_args.squash = False
     agent_args.pi_args = pi_args
 
