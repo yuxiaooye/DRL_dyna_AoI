@@ -44,10 +44,10 @@ def getRunArgs(input_args):
 
 
 def getAlgArgs(run_args, input_args, env):
-    assert input_args.env in ['Mobile', 'MobileHao', 'MobileEveryStepUpdate']
+    assert input_args.env.startswith('Mobile')
     assert input_args.algo in ['DPPO', 'CPPO', 'DMPO', 'IC3Net', 'IA2C', 'G2ANet', 'IPPO']
-    env_str = input_args.env[0].upper() + input_args.env[1:]
-    config = importlib.import_module(f"algorithms.config.{env_str}_{input_args.algo}")
+    # env_str = input_args.env[0].upper() + input_args.env[1:]
+    config = importlib.import_module(f"algorithms.config.Mobile_{input_args.algo}")
     # 在这里，得到了alg_args.agent_args.action_space
     alg_args = config.getArgs(run_args.radius_v, run_args.radius_pi, env, input_args=input_args)
     return alg_args

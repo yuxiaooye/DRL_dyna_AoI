@@ -20,7 +20,6 @@ class EnvMobileEveryStepUpdate():
     def __init__(self, env_args, input_args, **kwargs):
         assert input_args.fixed_col_time
 
-
         self.config = Config(env_args, input_args)
         self.input_args = input_args
         self.debug = self.input_args.debug
