@@ -53,6 +53,7 @@ class EnvMobile():
         self.bonus_reward_ratio = self.config("bonus_reward_ratio")
         self.UPDATE_USER_NUM = self.config("update_user_num")
         self.USER_DATA_AMOUNT = self.config("user_data_amount")
+        self.UAV_HEIGHT = self.config("uav_height")
 
         self.n_agents = self.UAV_NUM
         self.n_actions = self.ACTION_ROOT
@@ -114,13 +115,10 @@ class EnvMobile():
         self.poi_history = []  # episode结束后，长度为121
         self.aoi_vio_ratio_list = []  # 当前时间步有多大比例的PoI违反了aoi阈值
         self.tx_satis_ratio_list = []  # 当前时间步有多大比例的被服务aoi满足了data rate阈值
-        # 监视下面三个reward乘上ratio之前的尺度
+        # 监视下面几个reward乘上ratio之前的尺度
         self.aoi_reward_list = []
-        self.bonus_reward_list = []
-        self.aoipenalty_reward_list = []
-        self.txpenalty_reward_list = []
-
-
+        self.aoi_penalty_reward_list = []
+        self.tx_penalty_reward_list = []
 
         self.aoi_history = [0]  # episode结束后，长度为121。为什么初始时要有一个0？
 
@@ -262,7 +260,7 @@ class EnvMobile():
         # 惩罚基于当前时刻违反AoIth的user的比例，所有uav的惩罚相同
         if em_now != 0:
             penalty_r = -np.ones(self.UAV_NUM) * (em_now / self.POI_NUM) * self.aoi_vio_penalty_ratio
-            self.aoipenalty_reward_list.extend((penalty_r/self.aoi_vio_penalty_ratio).tolist())
+            self.aoi_penalty_reward_list.extend((penalty_r/self.aoi_vio_penalty_ratio).tolist())
             uav_rewards += penalty_r
 
         '''step3. episode结束时的后处理'''
@@ -280,23 +278,19 @@ class EnvMobile():
     def summary_info(self, info):
         t_e = np.sum(np.sum(self.uav_energy_consuming_list))
 
-        # mean_aoi的分子是图2黄色部分面积，分母是以秒为单位的总时间，除法后得到纵轴的标量，单位是s
-        mean_aoi = sum(self.poi_aoi_area) / (self.POI_NUM * self.MAX_EPISODE_STEP * self.TIME_SLOT)
-        mean_aoi = mean_aoi / self.TIME_SLOT  # 单位是时间步的aoi
-
-        info['episodic_aoi'] = mean_aoi  # metric1 OK
-        info['aoi_satis_ratio'] = sum(1 - np.array(self.aoi_vio_ratio_list)) / self.step_count  # metric2 OK
-        info['tx_satis_ratio'] = sum(self.tx_satis_ratio_list) / len(self.tx_satis_ratio_list)  # metric3 OK
-        info['energy_consuming_ratio'] = t_e / (self.UAV_NUM * self.INITIAL_ENERGY)  # metric4 OK
+        # 分子是图2黄色部分面积，分母前三项是以秒为单位的总时间，单位是时间步数量
+        episodic_aoi = sum(self.poi_aoi_area) / (self.POI_NUM * self.MAX_EPISODE_STEP * self.TIME_SLOT * self.TIME_SLOT)
+        aoi_satis_ratio = sum(1 - np.array(self.aoi_vio_ratio_list)) / self.step_count
+        tx_satis_ratio = sum(self.tx_satis_ratio_list) / len(self.tx_satis_ratio_list)
+        energy_consuming_ratio = t_e / (self.UAV_NUM * self.INITIAL_ENERGY)
+        info['episodic_aoi'] = episodic_aoi
+        info['aoi_satis_ratio'] = aoi_satis_ratio
+        info['tx_satis_ratio'] = tx_satis_ratio
+        info['energy_consuming_ratio'] = energy_consuming_ratio
+        info['QoI'] = min(aoi_satis_ratio, tx_satis_ratio) / energy_consuming_ratio
 
         info['aoi_reward'] = np.mean(self.aoi_reward_list)
-        info['bonus_reward'] = np.mean(self.bonus_reward_list) if len(self.bonus_reward_list) != 0 else 0
-        info['penalty_reward'] = np.mean(self.aoipenalty_reward_list) if len(self.aoipenalty_reward_list) != 0 else 0
-
-        if self.debug or self.test:
-            print(f""
-                  f"episodic_aoi: {info['episodic_aoi']} "
-                  )
+        info['aoi_penalty_reward'] = np.mean(self.aoi_penalty_reward_list) if len(self.aoi_penalty_reward_list) != 0 else 0
 
         return info
 

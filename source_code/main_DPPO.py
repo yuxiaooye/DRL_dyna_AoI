@@ -110,6 +110,8 @@ def override(alg_args, run_args, input_args, env):
         run_args.name += f'_AmountPropToSNRth'
     if input_args.aoith != 60:
         run_args.name += f'_AoIth={input_args.aoith}'
+    if input_args.uav_height != 100:
+        run_args.name += f'_UAVHeight={input_args.uav_height}'
 
     ## MDP
     if input_args.max_episode_step != 120:
@@ -184,6 +186,7 @@ def parse_args():
     parser.add_argument('--fixed-col-time', action='store_false')
     parser.add_argument('--amount_prop_to_SNRth', action='store_true')
     parser.add_argument('--aoith', default=60, type=int)
+    parser.add_argument('--uav_height', default=100, type=int)
     ## 0216
     parser.add_argument('--weighted_r', action='store_true')
     ## MDP
@@ -255,6 +258,7 @@ env_args = {  # 这里环境类的参数抄昊宝
     "update_num": input_args.update_num,
     "uav_num": input_args.uav_num,
     "AoI_THRESHOLD": input_args.aoith,
+    "uav_height": input_args.uav_height,
 }
 
 run_args = getRunArgs(input_args)
