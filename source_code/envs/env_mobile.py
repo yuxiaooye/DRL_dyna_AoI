@@ -488,35 +488,31 @@ class EnvMobile():
         # TODO 把snrmap改为人群预测图
         snrmap = np.zeros((self.cell_num, self.cell_num))
 
-        '''
-        计算每个(uav-user)对的ans
-        队列中有包的poi距离它最近的uav有多远 即为d，当然这是很naive的做法，设计的自由度很高、可考虑的东西很多
-        '''
+
         # 要的是下一步user的位置，所以+1
         next_poi_positions = copy.deepcopy(self.poi_mat[:, min(self.step_count+1, self.poi_mat.shape[1]-1), :])  # 终止状态越界，取min
         # 如果更精细地做，poi_value也应该是用下一时刻的，不过当前时刻新产生的包大概率也不会被下一时刻的无人机收集到（因为FIFO），所以先不做
-        for poi_index, (next_poi_position, poi_value) in enumerate(zip(next_poi_positions, self.poi_value)):
-            if len(self.poi_value[poi_index]) == 0: continue  # 队列中没包的条件是len为0吗？
-            d_min = float('inf')
-            for uav_index in range(self.n_agents):
-                d = self._cal_distance(next_poi_position, self.uav_position[uav_index])
-                d_min = min(d, d_min)
-            if self.input_args.fixed_range:
-                next_SNRth = self.COLLECT_RANGE
-            else:  # self.step_count-1是当前的阈值，这里要的是下一步的阈值，所以不-1
-                next_SNRth = self.poi_QoS[poi_index][self.step_count]
-            # ans反映一个poi的需求没被满足的gap，物理意义是uav应该朝着ans大的cell移动
-            # 一方面，d_min越大，说明当前没有无人机靠近该user
-            # 另一方面，mext_SNRth越小，说明无人机必须很接近该user才能meet his/her requirement
-            # 如果已经有无人机在收集范围内，ans置为0
-            ans = max(d_min - next_SNRth, 0)
+        for poi_index, next_poi_position in enumerate(next_poi_positions):
+            # if len(self.poi_value[poi_index]) == 0: continue  # 队列中没包的条件是len为0吗？
+            # d_min = float('inf')
+            # for uav_index in range(self.n_agents):
+            #     d = self._cal_distance(next_poi_position, self.uav_position[uav_index])
+            #     d_min = min(d, d_min)
+            # if self.input_args.fixed_range:
+            #     next_SNRth = self.COLLECT_RANGE
+            # else:  # self.step_count-1是当前的阈值，这里要的是下一步的阈值，所以不-1
+            #     next_SNRth = self.poi_QoS[poi_index][self.step_count]
+            # # ans反映一个poi的需求没被满足的gap，物理意义是uav应该朝着ans大的cell移动
+            # # 一方面，d_min越大，说明当前没有无人机靠近该user
+            # # 另一方面，mext_SNRth越小，说明无人机必须很接近该user才能meet his/her requirement
+            # # 如果已经有无人机在收集范围内，ans置为0
+            # ans = max(d_min - next_SNRth, 0)
             x, y = next_poi_position
             i = np.clip(int(x/self.cell_span_x), 0, self.cell_num-1)
             j = np.clip(int(y/self.cell_span_y), 0, self.cell_num-1)
-            snrmap[i][j] += ans  # 根据用户位置把ans加到具体的cell中
+            snrmap[i][j] += 1  # 根据用户位置把ans加到具体的cell中
 
-        if snrmap.max() != 0:
-            snrmap = snrmap / snrmap.max()  # 归一化
+        snrmap = snrmap / self.POI_NUM  # 归一化
         snrmap = snrmap.reshape(self.cell_num * self.cell_num, )
         # TODO 目前的实现是全局snr-map 后面改成每个uav各自部分可观
         return snrmap.tolist()
@@ -597,4 +593,3 @@ class EnvMobile():
         if is_newbest:
             from tools.post.vis import render_HTML
             render_HTML(self.input_args.output_dir, tag=phase)
-            print('call vis.gif along with the training')

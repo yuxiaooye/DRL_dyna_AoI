@@ -24,7 +24,6 @@ def getRunArgs(input_args):
 
 
     '''yyx add start'''
-    run_args.profiling = False
     run_args.debug = input_args.debug
     run_args.test = input_args.test
     run_args.init_checkpoint = input_args.init_checkpoint
@@ -58,7 +57,14 @@ def initAgent(logger, device, agent_args, input_args):
 
 
 
-def override(alg_args, run_args, input_args):
+def override(alg_args, run_args, input_args, env):
+
+    if input_args.use_snrmap_shortcut:
+        # snr features数量， 直接shortcut到策略前一层，0代表不跳过
+        alg_args.agent_args.pi_args.snrmap_features = env.cell_num * env.cell_num
+    else:
+        alg_args.agent_args.pi_args.snrmap_features = 0
+
     if run_args.debug:
         alg_args.model_batch_size = 5  # 用于训练一次model的traj数量
         alg_args.max_ep_len = 5
@@ -78,11 +84,8 @@ def override(alg_args, run_args, input_args):
         run_args.debug = True
         alg_args.n_warmup = 0
         alg_args.n_test = 10
-    if run_args.profiling:
-        raise NotImplementedError
     if run_args.seed is None:
-        # 这里这里seed是随机的，我还是改成全统一的吧~
-        # run_args.seed = int(time.time() * 1000) % 65536
+        # 固定随机种子
         run_args.seed = 1
 
     '''yyx add begin'''
@@ -112,7 +115,7 @@ def override(alg_args, run_args, input_args):
     if input_args.aoith != 100:
         run_args.name += f'_AoIth={input_args.aoith}'
 
-## MDP
+    ## MDP
     if input_args.max_episode_step != 120:
         run_args.name += f'_MaxTs={input_args.max_episode_step}'
     if input_args.future_obs != 0:
@@ -257,7 +260,7 @@ print('debug =', run_args.debug)
 
 dummy_env = env_fn_train(env_args, input_args, phase='dummy')
 alg_args = getAlgArgs(run_args, input_args, dummy_env)
-alg_args, run_args, input_args = override(alg_args, run_args, input_args)
+alg_args, run_args, input_args = override(alg_args, run_args, input_args, dummy_env)
 record_input_args(input_args, env_args, run_args.output_dir)
 
 from env_configs.wrappers.env_wrappers import SubprocVecEnv
@@ -271,6 +274,10 @@ logger = LogServer({'run_args': run_args, 'algo_args': alg_args, 'input_args': i
 logger = LogClient(logger)
 # logger同时被传入agent类和runner类
 agent = initAgent(logger, run_args.device, alg_args.agent_args, input_args)
+
+import time
+start = time.time()
 OnPolicyRunner(logger=logger, agent=agent, envs_learn=envs_train, envs_test=envs_test, dummy_env=dummy_env,
                run_args=run_args, alg_args=alg_args, input_args=input_args).run()
-print('OK!')
+end = time.time()
+print(f'OK! 用时{end-start}秒')

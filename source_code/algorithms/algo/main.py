@@ -137,7 +137,7 @@ class OnPolicyRunner:
             while not (done or (ep_len == length)):  # 测试时限定一个episode最大为length步
                 s = envs.get_obs_from_outside()
                 a = self.agent.act(s).sample()  # shape = (-1, 3)
-                # if len(a.shape) == 2 and a.shape[0] == 1:  # for IA2C and IC3Net TODO 向量环境下这个需要改！
+                # if len(a.shape) == 2 and a.shape[0] == 1:  # for IA2C and IC3Net 注意：向量环境下这个需要改！
                 #     a = a.squeeze(0)
                 a = a.detach().cpu().numpy()  # # shape should be (UAV_NUM, )
                 s1, r, done, _ = envs.step(a.tolist())
@@ -179,7 +179,7 @@ class OnPolicyRunner:
             dist = self.agent.act(s)
             a = dist.sample()
             logp = dist.log_prob(a)
-            # if len(a.shape) == 2 and a.shape[0] == 1:  # for IA2C and IC3Net  # TODO 向量环境下要改~ a.shape[0]已经不是IA2C和IC3Net会额外添加的batch的维度了，我猜需要维度从0改成1
+            # if len(a.shape) == 2 and a.shape[0] == 1:  # for IA2C and IC3Net  # 注意：向量环境下要改~ a.shape[0]已经不是IA2C和IC3Net会额外添加的batch的维度了，我猜需要维度从0改成1
             #     a = a.squeeze(0)
             #     logp = logp.squeeze(0)
             a = a.detach().cpu().numpy()

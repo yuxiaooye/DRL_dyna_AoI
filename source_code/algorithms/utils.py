@@ -441,7 +441,7 @@ class LogServer(object):
 
     def __init__(self, args):
         run_args, algo_args, input_args = args['run_args'], args['algo_args'], args['input_args']
-        self.run_args, self.algo_args = run_args, algo_args
+        self.run_args, self.algo_args, self.input_args = run_args, algo_args, input_args
         self.name = run_args.name  # 实验名字，包括超参数后缀的yyx经常用的那个
         self.mute = run_args.debug or run_args.mute_wandb  # wandb太慢，debug时不用
         if not self.mute:
@@ -500,11 +500,12 @@ class LogServer(object):
                 # self.writer.add_histogram(log_key, data[log_key], self.step)
                 pass
             else:
-                self.writer.add_scalar(log_key, data[log_key], self.step)
+                self.writer.add_scalar(log_key, data[log_key], self.step*self.input_args.n_thread)
             self.writer.flush()
 
         if not self.mute:
-            self.wandb_logger.log(data=data, step=self.step, commit=False)
+            # 让wandb的横轴增速正比于n_thread，达到无论几线程横轴长度一致的效果
+            self.wandb_logger.log(data=data, step=self.step*self.input_args.n_thread, commit=False)
         # "warning: step must only increase "commit = True
         # because wandb assumes step must increase per commit
         self.last_log = time.time()
