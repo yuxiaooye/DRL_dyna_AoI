@@ -342,10 +342,10 @@ class YyxMLPModel(nn.Module):  # 在更深入地重复造轮子之前，先浏�
         super().__init__()
 
         if multi_mlp:
-            self.pos_mlp = MLP(sizes=(33*2, 128, ))
+            self.pos_mlp = MLP(sizes=(33 * 2, 128,))
         else:
             hd = 256
-            self.fc = MLP(sizes=(obs_dim+1, 256, hd))
+            self.fc = MLP(sizes=(obs_dim + 1, 256, hd))
             self.s1s_branch = MLP(sizes=(hd, obs_dim))
             self.rs_branch = MLP(sizes=(hd, 1))
         self.multi_mlp = multi_mlp
@@ -553,7 +553,6 @@ class GraphConvolutionalModel(nn.Module):
                         reward_norm=torch.norm(r),
                         rel_reward_loss=rel_reward_loss)
 
-
         d = d.float()
         done_loss = self.BCE(done_pred, d)
         loss = loss + done_loss.mean()
@@ -720,14 +719,14 @@ class CategoricalActor(nn.Module):
         super().__init__()
         self.softmax = nn.Softmax(dim=-1)
         net_fn = net_args['network']
-        self.snrmap_features = net_args.get('snrmap_features',0)
+        self.snrmap_features = net_args.get('snrmap_features', 0)
 
-        if self.snrmap_features> 0:
-            net_args.sizes[0]-= self.snrmap_features
-            net_args.sizes[-1] = 32
+        if self.snrmap_features > 0:
+            net_args['sizes'][0] -= self.snrmap_features
+            net_args['sizes'][-1] = 32
             snr_net_args = copy.deepcopy(net_args)
-            snr_net_args.sizes = [32+self.snrmap_features,32,9]
-            self.snr_network = net_fn(snr_net_args)
+            snr_net_args['sizes'] = [32 + self.snrmap_features, 32, 9]
+            self.snr_network = net_fn(**snr_net_args)
 
         self.network = net_fn(**net_args)
         self.eps = 1e-5
@@ -737,10 +736,13 @@ class CategoricalActor(nn.Module):
 
     def forward(self, obs):
         # obs [B,S]
-        logit = self.network(obs[:,0:-self.snrmap_features])
         if self.snrmap_features > 0:
-            snrmap = obs[:,-self.snrmap_features:]
-            logit = self.snr_network(torch.cat([logit,snrmap],dim=-1))
+            logit = self.network(obs[:, 0:-self.snrmap_features])
+            snrmap = obs[:, -self.snrmap_features:]
+            logit = self.snr_network(torch.cat([logit, snrmap], dim=-1))
+        else:
+            assert self.snrmap_features == 0
+            logit = self.network(obs)
 
         probs = self.softmax(logit)
         probs = (probs + self.eps)

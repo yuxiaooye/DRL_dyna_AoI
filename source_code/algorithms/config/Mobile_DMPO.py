@@ -5,7 +5,7 @@ from algorithms.models import MLP
 from algorithms.utils import Config
 
 
-def getArgs(radius_v, radius_pi, env):
+def getArgs(radius_v, radius_pi, env, input_args=None):
     alg_args = Config()
     alg_args.n_iter = 5000  # 25000
     alg_args.n_inner_iter = 10  # 在一个n_iter循环执行多少次内循环，内循环意为执行一次rollout_model() agent与learned model交互并更新一次Agent参数
@@ -90,7 +90,10 @@ def getArgs(radius_v, radius_pi, env):
     # pi_args.sizes = [-1, 64, 64, agent_args.action_space.n]
     pi_args.sizes = [-1, 64, 64, 9]  # 9是硬编码的离散动作数
     pi_args.squash = False
-    pi_args.snrmap_features = 0  # snr features数量， 直接shortcut到策略前一层，0代表不跳过
+    if input_args is not None and input_args.use_snrmap_shortcut:
+        pi_args.snrmap_features = env.cell_num * env.cell_num  # snr features数量， 直接shortcut到策略前一层，0代表不跳过
+    else:
+        pi_args.snrmap_features = 0
     agent_args.pi_args = pi_args
 
     alg_args.agent_args = agent_args

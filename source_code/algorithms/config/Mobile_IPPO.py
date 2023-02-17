@@ -7,7 +7,7 @@ from algorithms.models import MLP
 from algorithms.utils import Config
 
 
-def getArgs(radius_v, radius_pi, env):
+def getArgs(radius_v, radius_pi, env, input_args=None):
 
     alg_args = Config()
     # 总训练步数 = n_iter * rollout_length，默认25K * 0.6K = 15M
@@ -74,7 +74,10 @@ def getArgs(radius_v, radius_pi, env):
     pi_args.activation = torch.nn.ReLU
     # pi_args.sizes = [-1, 64, 64, agent_args.action_space['uav'].n - 1 + agent_args.action_space['car'].n]
     pi_args.sizes = [-1, 64, 64, 9]  # 9是硬编码的离散动作数
-    pi_args.snrmap_features = 0  # snr features数量， 直接shortcut到策略前一层，0代表不跳过
+    if input_args is not None and input_args.use_snrmap_shortcut:
+        pi_args.snrmap_features = env.cell_num * env.cell_num  # snr features数量， 直接shortcut到策略前一层，0代表不跳过
+    else:
+        pi_args.snrmap_features = 0
     pi_args.squash = False
     agent_args.pi_args = pi_args
 

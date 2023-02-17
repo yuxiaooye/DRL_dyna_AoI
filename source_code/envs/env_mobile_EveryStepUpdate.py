@@ -14,8 +14,8 @@ import os.path as osp
 from env_configs.roadmap_env.roadmap_utils import Roadmap
 
 
-class EnvMobile():
-    ids = ['EnvMobile-v0']
+class EnvMobileEveryStepUpdate():
+    ids = ['EnvMobileEveryStepUpdate-v0']
 
     def __init__(self, env_args, input_args, **kwargs):
         assert input_args.fixed_col_time

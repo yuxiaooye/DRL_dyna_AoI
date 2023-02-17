@@ -44,12 +44,12 @@ def getRunArgs(input_args):
 
 
 def getAlgArgs(run_args, input_args, env):
-    assert input_args.env in ['mobile']
+    assert input_args.env in ['Mobile', 'MobileHao', 'MobileEveryStepUpdate']
     assert input_args.algo in ['DPPO', 'CPPO', 'DMPO', 'IC3Net', 'IA2C', 'G2ANet', 'IPPO']
     env_str = input_args.env[0].upper() + input_args.env[1:]
     config = importlib.import_module(f"algorithms.config.{env_str}_{input_args.algo}")
     # 在这里，得到了alg_args.agent_args.action_space
-    alg_args = config.getArgs(run_args.radius_v, run_args.radius_pi, env)
+    alg_args = config.getArgs(run_args.radius_v, run_args.radius_pi, env, input_args=input_args)
     return alg_args
 
 
@@ -117,9 +117,8 @@ def override(alg_args, run_args, input_args):
         run_args.name += f'_FutureObs={input_args.future_obs}'
     if input_args.use_snrmap:
         run_args.name += f'_UseSNRMAP'
-
-
-
+    if input_args.use_snrmap_shortcut:
+        run_args.name += f'_UseSNRMAPShortcut'
 
     # tune algo
     if input_args.lr is not None:
@@ -151,7 +150,7 @@ def parse_args():
 
     parser.add_argument('--debug', action='store_true', default=False, )
     parser.add_argument('--test', action='store_true', default=False, )
-    parser.add_argument('--env', type=str, default='mobile')
+    parser.add_argument('--env', type=str, default='Mobile')
     parser.add_argument('--algo', type=str, required=False, default='DPPO', help="algorithm(DMPO/IC3Net/CPPO/DPPO/IA2C/IPPO) ")
     parser.add_argument('--device', type=str, required=False, default='cuda:0', help="device(cpu/cuda:0/cuda:1/...) ")
     parser.add_argument("--dataset", type=str, default='NCSU', choices=['NCSU'])
@@ -171,7 +170,6 @@ def parse_args():
     parser.add_argument('--use-mlp-model', action='store_true', help='将model改为最简单的mlp，仅用于DMPO')
     parser.add_argument('--multi-mlp', action='store_true', help='在model中分开预测obs中不同类别的信息，仅用于DMPO')
     # tune env
-
     ## setting
     parser.add_argument('--fixed-range', action='store_false')  # 重要，sensing range现在固定了
     parser.add_argument('--snr', type=float, default=200)
@@ -188,6 +186,7 @@ def parse_args():
     parser.add_argument('--max_episode_step', type=int, default=120)
     parser.add_argument('--future_obs', type=int, default=0)
     parser.add_argument('--use_snrmap', action='store_true')
+    parser.add_argument('--use_snrmap_shortcut', action='store_true')
     args = parser.parse_args()
 
     if args.multi_mlp:
@@ -228,8 +227,15 @@ elif input_args.algo == 'G2ANet':
 elif input_args.algo == 'IPPO':
     from algorithms.algo.agent.IPPO import IPPOAgent as agent_fn
 
-from envs.env_mobile import EnvMobile
-env_fn_train, env_fn_test = EnvMobile, EnvMobile
+if input_args.env == 'Mobile':
+    from envs.env_mobile import EnvMobile
+    env_fn_train, env_fn_test = EnvMobile, EnvMobile
+elif input_args.env == 'MobileHao':
+    from envs.env_mobile_hao import EnvMobileHao
+    env_fn_train, env_fn_test = EnvMobileHao, EnvMobileHao
+elif input_args.env == 'MobileEveryStepUpdate':
+    from envs.env_mobile_EveryStepUpdate import EnvMobileEveryStepUpdate
+    env_fn_train, env_fn_test = EnvMobileEveryStepUpdate, EnvMobileEveryStepUpdate
 
 
 env_args = {  # 这里环境类的参数抄昊宝
