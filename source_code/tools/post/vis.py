@@ -80,6 +80,20 @@ def render_HTML(output_dir, tag='train', draw_snrth=False, traj_filename='eps_be
         'uav4': '#%02X%02X%02X' % (0, 0, 255),  # blue
         'uav5': '#%02X%02X%02X' % (0, 0, 255),  # blue
         'uav6': '#%02X%02X%02X' % (0, 0, 255),  # blue
+        'uav7': '#%02X%02X%02X' % (0, 0, 255),  # blue
+        'uav8': '#%02X%02X%02X' % (0, 0, 255),  # blue
+        'uav9': '#%02X%02X%02X' % (0, 0, 255),  # blue
+        'uav10': '#%02X%02X%02X' % (0, 0, 255),  # blue
+        'uav11': '#%02X%02X%02X' % (0, 0, 255),  # blue
+        'uav12': '#%02X%02X%02X' % (0, 0, 255),  # blue
+        'uav13': '#%02X%02X%02X' % (0, 0, 255),  # blue
+        'uav14': '#%02X%02X%02X' % (0, 0, 255),  # blue
+        'uav15': '#%02X%02X%02X' % (0, 0, 255),  # blue
+        'uav16': '#%02X%02X%02X' % (0, 0, 255),  # blue
+        'uav17': '#%02X%02X%02X' % (0, 0, 255),  # blue
+        'uav18': '#%02X%02X%02X' % (0, 0, 255),  # blue
+        'uav19': '#%02X%02X%02X' % (0, 0, 255),  # blue
+        'uav20': '#%02X%02X%02X' % (0, 0, 255),  # blue
     }
 
     # fillin positions for uav, human
