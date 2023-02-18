@@ -37,7 +37,6 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
     def __init__(self, logger, device, agent_args, input_args):
         super().__init__()
         self.input_args = input_args
-        self.use_extended_value = input_args.use_extended_value
 
         self.logger = logger  # LogClient类对象
         self.device = device
@@ -55,8 +54,6 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
         self.n_update_pi = agent_args.n_update_pi
         self.n_minibatch = agent_args.n_minibatch
         self.use_reduced_v = agent_args.use_reduced_v
-        if not self.use_extended_value:
-            self.use_reduced_v = False
 
         self.use_rtg = agent_args.use_rtg
         self.use_gae_returns = agent_args.use_gae_returns
@@ -69,8 +66,7 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
         self.action_space = agent_args.action_space
         # self.action_dim = sum([dim.n for dim in self.action_space])
 
-        self.adj = torch.as_tensor(agent_args.adj, device=self.device, dtype=torch.float) \
-            if self.use_extended_value else None
+        self.adj = torch.as_tensor(agent_args.adj, device=self.device, dtype=torch.float)
         self.radius_v = agent_args.radius_v
         self.radius_pi = agent_args.radius_pi
         self.pi_args = agent_args.pi_args
@@ -103,11 +99,8 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
             return ans_s
 
         assert which_net in ('pi', 'v')
-        if self.use_extended_value:
-            s = self.collect_pi.gather(s) if which_net == 'pi' else self.collect_v.gather(s)
-        else:
-            assert s.shape[1] == self.n_agent
-            s = [s[:, i, :] for i in range(self.n_agent)]
+        s = self.collect_pi.gather(s) if which_net == 'pi' else self.collect_v.gather(s)
+
         return s
 
     def s_for_agent(self, s, i):
@@ -271,24 +264,20 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
 
     def _init_actors(self):
         # collect_pi.degree = [2,3,2] 意为一个agent与多少个agent连接（包括自己）
-        collect_pi = MultiCollect(torch.matrix_power(self.adj, self.radius_pi), device=self.device) \
-            if self.use_extended_value else None
+        collect_pi = MultiCollect(torch.matrix_power(self.adj, self.radius_pi), device=self.device)
         actors = nn.ModuleList()
         for i in range(self.n_agent):
-            self.pi_args.sizes[0] = collect_pi.degree[i] * self.observation_dim \
-                if self.use_extended_value else self.observation_dim
+            self.pi_args.sizes[0] = collect_pi.degree[i] * self.observation_dim
             actors.append(CategoricalActor(**self.pi_args._toDict()).to(self.device))
 
         return collect_pi, actors
 
     def _init_vs(self):
-        collect_v = MultiCollect(torch.matrix_power(self.adj, self.radius_v), device=self.device) \
-            if self.use_extended_value else None
+        collect_v = MultiCollect(torch.matrix_power(self.adj, self.radius_v), device=self.device)
         vs = nn.ModuleList()
         for i in range(self.n_agent):
             # 确认网络的输入维度 其中.degree[i]是agent i的邻域规模，标量
-            self.v_args.sizes[0] = collect_v.degree[i] * self.observation_dim \
-                if self.use_extended_value else self.observation_dim
+            self.v_args.sizes[0] = collect_v.degree[i] * self.observation_dim
             vs.append(MLP(**self.v_args._toDict()).to(self.device))
         return collect_v, vs
 
@@ -323,7 +312,7 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
             prev_advantage = advantages.select(1, t)
         if self.advantage_norm:
             advantages = (advantages - advantages.mean(dim=1, keepdim=True)) / (advantages.std(dim=1, keepdim=True) + 1e-5)
-        if self.input_args.algo == 'G2ANet' or not self.use_extended_value:  # 用G2A或者IPPO时，没必要用reduced_adv，也即邻域的adv的均值
+        if self.input_args.algo in ('G2ANet', 'IPPO'):  # 用G2A或者IPPO时，没必要用reduced_adv，也即邻域的adv的均值
             return value.detach(), returns, advantages.detach(), None
         else:
             reduced_advantages = self.collect_v.reduce_sum(advantages.view(-1, n, 1)).view(advantages.size())

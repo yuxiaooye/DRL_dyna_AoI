@@ -134,13 +134,15 @@ def override(alg_args, run_args, input_args, env):
         alg_args.agent_args.lr_v = input_args.lr_v
     if input_args.use_stack_frame:
         run_args.name += f'_UseStackFrame'
-    if not input_args.use_extended_value:
-        run_args.name += f'_NotUseExtendedValue'
-    if input_args.use_mlp_model:
-        run_args.name += f'_MLPModel'
-    if input_args.multi_mlp:
-        run_args.name += f'_MultiMLP'
-        
+    if input_args.g2a_hidden_dim != 64:
+        run_args.name += f'_G2AHiddenDim={input_args.g2a_hidden_dim}'
+    # if not input_args.use_extended_value:
+    #     run_args.name += f'_NotUseExtendedValue'
+    # if input_args.use_mlp_model:
+    #     run_args.name += f'_MLPModel'
+    # if input_args.multi_mlp:
+    #     run_args.name += f'_MultiMLP'
+
     run_args.name += '_'+input_args.tag
     final = '../{}/{}'.format(input_args.output_dir, run_args.name)
     run_args.output_dir = final
@@ -177,9 +179,10 @@ def parse_args():
     parser.add_argument('--lr', type=float)
     parser.add_argument('--lr_v', type=float)
     parser.add_argument('--use-stack-frame', action='store_true')
-    parser.add_argument('--use_extended_value', action='store_false', help='反逻辑，仅用于DPPO')
-    parser.add_argument('--use-mlp-model', action='store_true', help='将model改为最简单的mlp，仅用于DMPO')
-    parser.add_argument('--multi-mlp', action='store_true', help='在model中分开预测obs中不同类别的信息，仅用于DMPO')
+    # parser.add_argument('--use_extended_value', action='store_false', help='反逻辑，仅用于DPPO')
+    # parser.add_argument('--use-mlp-model', action='store_true', help='将model改为最简单的mlp，仅用于DMPO')
+    # parser.add_argument('--multi-mlp', action='store_true', help='在model中分开预测obs中不同类别的信息，仅用于DMPO')
+    parser.add_argument('--g2a_hidden_dim', type=int, default=64, help='在model中分开预测obs中不同类别的信息，仅用于DMPO')
     # tune env
     ## setting
     parser.add_argument('--fixed-range', action='store_false')  # 重要，sensing range现在固定了
@@ -200,8 +203,8 @@ def parse_args():
     parser.add_argument('--use_snrmap', action='store_true')  # shrotcut are always used
     args = parser.parse_args()
 
-    if args.multi_mlp:
-        assert args.use_mlp_model
+    # if args.multi_mlp:
+    #     assert args.use_mlp_model
 
     if args.debug:
         assert args.group == 'debug'

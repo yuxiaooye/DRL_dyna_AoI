@@ -8,9 +8,7 @@ class IPPOAgent(DPPOAgent):
     def __init__(self, logger, device, agent_args, input_args):
         DPPOAgent.__init__(self, logger, device, agent_args, input_args)
 
-        self.use_extended_value = False  # 关键，后续不进行智能体间obs的卷
-
-        self.actors = self._init_actors()  # collect_pi和collect_v应该一样吧？
+        self.actors = self._init_actors()
         self.vs = self._init_vs()
         self.optimizer_pi = Adam(self.actors.parameters(), lr=self.lr)
         self.optimizer_v = Adam(self.vs.parameters(), lr=self.lr_v)
