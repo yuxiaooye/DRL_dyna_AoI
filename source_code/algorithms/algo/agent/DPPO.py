@@ -84,6 +84,7 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
             self.optimizer_pi = Adam(self.actors.parameters(), lr=self.lr)
 
     def get_networked_s(self, s, which_net):
+        # s [1,3,106]
         if self.input_args.algo == 'IPPO':
             return s
         if self.input_args.algo == 'G2ANet2':
@@ -96,9 +97,10 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
             for i in range(self.n_agent):
                 hard_att = hard_atts[i]
                 # 添加对自己的hard-att一定是1的维度
-                hard_att = torch.cat([hard_att[:, :i], torch.ones(n_thread, 1).to(self.device), hard_att[:, i:]], dim=-1)
+                hard_att = torch.cat([hard_att[:, :i], torch.ones(n_thread, 1).to(self.device), hard_att[:, i:]], dim=-1) #[1,3]
                 shared_s = s * hard_att.unsqueeze(-1)  # mask后仅邻居的状态可见
-                shared_s = torch.max(shared_s, dim=1)[0]  # 取并集
+                shared_s = torch.sum(shared_s, dim=1)  # 取并集
+                shared_s = torch.where(s[:,i]>0,s[:,i],shared_s)
                 ans_s.append(shared_s)
             return ans_s
 
@@ -131,8 +133,12 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
             probs = []
             for i in range(self.n_agent):
                 probs.append(self.actors[i](self.s_for_agent(s, i)))
-            probs = torch.stack(probs, dim=1)  # shape = (-1, NUM_AGENT, 2, act_dim)
-            return Categorical(probs)
+            
+            probs = torch.stack(probs, dim=1)  # shape = (-1, NUM_AGENT, act_dim1+act_dim2)    
+            return {
+                'branch1':Categorical(probs[:,:,0:9]),
+                'branch2':Categorical(probs[:,:,9:])
+            }
 
     def get_logp(self, s, a):
         """
@@ -151,9 +157,14 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
         # Now s[i].dim() == 2, a.dim() == 3
         log_prob = []
         for i in range(self.n_agent):
-            probs = self.actors[i](self.s_for_agent(s, i))
-            index = torch.select(a, dim=1, index=i).long()
-            ans = torch.log(torch.gather(probs, dim=-1, index=index.unsqueeze(-1)))
+            probs = self.actors[i](self.s_for_agent(s, i)) # [320,2,9]
+
+            index1 = torch.select(a, dim=1, index=i).long()[:,0]
+            ans1 = torch.log(torch.gather(probs[:,:9], dim=-1, index=index1.unsqueeze(-1))) # [320,2,1]
+            index2 = torch.select(a, dim=1, index=i).long()[:,1]
+            ans2 = torch.log(torch.gather(probs[:,9:], dim=-1, index=index2.unsqueeze(-1))) # [320,2,1]
+            ans = torch.cat([ans1,ans2],dim=-1)
+            
             log_prob.append(ans.squeeze(-1))
         log_prob = torch.stack(log_prob, dim=1)
         while log_prob.dim() < 3:

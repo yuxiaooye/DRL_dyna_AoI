@@ -66,7 +66,7 @@ class EnvMobile():
 
         self._get_energy_coefficient()
         # self.action_space = spaces.Discrete(9)
-        self.action_space = spaces.MultiDiscrete([9, 9])
+        self.action_space = spaces.MultiDiscrete([9, self.UPDATE_NUM])
 
         self.cell_num = 6
         self.cell_span_x = self.MAP_X / self.cell_num

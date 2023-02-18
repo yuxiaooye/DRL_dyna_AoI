@@ -446,7 +446,7 @@ class LogServer(object):
         self.mute = run_args.debug or run_args.mute_wandb  # wandb太慢，debug时不用
         if input_args.user=='wh':
             key = '4005a92bfae3a8351f46946688fba35856fe6d79'
-            entity = 'wh'
+            entity = '997009553'
         elif input_args.user=='yyx':
             key = '109d34efac30067df641a402ad8c505d5b80970f'
             entity = 'michaelye'

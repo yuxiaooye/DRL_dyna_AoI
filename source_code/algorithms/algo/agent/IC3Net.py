@@ -305,8 +305,14 @@ class IC3Net(nn.ModuleList, YyxAgentBase):
         log_prob = []
         for i in range(self.n_agent):
             if self.discrete:
-                probs = self.actors[i](hidden_state[i])
-                log_prob.append(torch.log(torch.gather(probs, dim=-1, index=torch.select(a, dim=1, index=i).long())))
+                probs = self.actors[i](self.s_for_agent(s, i)) # [320,2,9]
+                index1 = torch.select(a, dim=1, index=i).long()[:,0]
+                ans1 = torch.log(torch.gather(probs[:,:9], dim=-1, index=index1.unsqueeze(-1))) # [320,2,1]
+                index2 = torch.select(a, dim=1, index=i).long()[:,1]
+                ans2 = torch.log(torch.gather(probs[:,9:], dim=-1, index=index2.unsqueeze(-1))) # [320,2,1]
+                ans = torch.cat([ans1,ans2],dim=-1)
+                
+                log_prob.append(ans.squeeze(-1))
             else:
                 log_prob.append(self.actors[i](hidden_state[i], a.select(dim=1, index=i)))
         log_prob = torch.stack(log_prob, dim=1)
