@@ -57,7 +57,7 @@ class Config(object):
 
             # UAV
             'uav_num': 3,
-            "agent_field": 500,
+            "agent_field": 750,  # 2.18下午改之前是500
 
             # PoI
             "update_num": 10,  # 一个uav同时服务多少个poi
