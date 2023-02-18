@@ -6,3 +6,17 @@ nohup_log/
 *backup
 *.sh
 *.pyc
+source_code/algorithms/__pycache__/__init__.cpython-38.pyc
+source_code/algorithms/__pycache__/models.cpython-38.pyc
+source_code/algorithms/__pycache__/utils.cpython-38.pyc
+source_code/algorithms/algo/__pycache__/__init__.cpython-38.pyc
+source_code/algorithms/algo/__pycache__/buffer.cpython-38.pyc
+source_code/algorithms/algo/__pycache__/main.cpython-38.pyc
+source_code/algorithms/algo/__pycache__/yyx_agent_base.cpython-38.pyc
+source_code/algorithms/algo/agent/__pycache__/__init__.cpython-38.pyc
+source_code/algorithms/algo/agent/__pycache__/DPPO.cpython-38.pyc
+source_code/algorithms/config/__pycache__/__init__.cpython-38.pyc
+source_code/env_configs/__pycache__/__init__.cpython-38.pyc
+source_code/envs/__pycache__/__init__.cpython-38.pyc
+source_code/envs/__pycache__/config_3d.cpython-38.pyc
+source_code/envs/__pycache__/env_mobile.cpython-38.pyc
