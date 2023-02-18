@@ -42,7 +42,9 @@ class Roadmap():
 
     def init_pois(self, max_episode_step=120):
         '''读df并处理表头'''
-        poi_df = pd.read_csv(osp.join(project_dir, f'envs/{self.dataset}/human{max_episode_step}.csv'))
+        # TODO DASAP
+        # poi_df = pd.read_csv(osp.join(project_dir, f'envs/{self.dataset}/human{max_episode_step}.csv'))
+        poi_df = pd.read_csv('F:\PycharmProjects\jsac\DRL_dyna_AoI\kaist_final.csv')
         assert poi_df.columns.to_list()[-2:] == ['px', 'py']
         '''将df转换为np.array'''
         poi_mat = np.expand_dims(poi_df[poi_df['id'] == 0].values[:, -2:], axis=0)  # idt
@@ -54,6 +56,7 @@ class Roadmap():
         return poi_mat  # shape = (33, 121, 2) 意为33个poi在121个时间步的坐标信息
 
     def lonlat2pygamexy(self, lon, lat):
+        # 计算机坐标系，以左上角为远点，向下为x轴正方向，向右为y轴正方向
         x = - self.max_dis_x * (lat - self.upper_right[1]) / (self.upper_right[1] - self.lower_left[1])
         y = self.max_dis_y * (lon - self.lower_left[0]) / (self.upper_right[0] - self.lower_left[0])
         return x, y

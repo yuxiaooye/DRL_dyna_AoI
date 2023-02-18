@@ -160,7 +160,7 @@ def parse_args():
     parser.add_argument('--env', type=str, default='Mobile')
     parser.add_argument('--algo', type=str, required=False, default='IPPO', help="algorithm(DMPO/IC3Net/CPPO/DPPO/IA2C/IPPO) ")
     parser.add_argument('--device', type=str, required=False, default='cuda:0', help="device(cpu/cuda:0/cuda:1/...) ")
-    parser.add_argument("--dataset", type=str, default='NCSU', choices=['NCSU', 'KAIST'])
+    parser.add_argument("--dataset", type=str, default='NCSU', choices=['NCSU', 'KAIST', 'purdue'])
     parser.add_argument("--tag", type=str, default='', help='每个单独实验的备注')
     # dirs
     parser.add_argument("--output_dir", type=str, default='runs/debug', help="which fold to save under 'runs/'")
