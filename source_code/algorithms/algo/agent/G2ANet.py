@@ -9,7 +9,7 @@ from torch.optim import Adam
 
 '''输入所有agent的obs，输出表征模块后各agent的obs embedding（魔改仅删除了过decoding）'''
 class G2AEmbedNet(nn.Module):
-    def __init__(self, obs_dim, n_actions, n_agent, device,
+    def __init__(self, obs_dim, n_agent, device,
                  rnn_hidden_dim=64, attention_dim=32, hard=True):
         super(G2AEmbedNet, self).__init__()
 
@@ -45,17 +45,12 @@ class G2AEmbedNet(nn.Module):
         obs.shape = (threads, n_agent, dim)
         '''
         n_thread = obs.shape[0]
-        assert obs.shape[1] == self.n_agent
-        size = self.n_agent * n_thread  # 从n_agent魔改为n_agent*n_thread
-        # 先对obs编码
-        obs_encoding = f.relu(self.encoding(obs))
-        # h_in = hidden_state.reshape(-1, self.rnn_hidden_dim)
+        assert self.n_agent == obs.shape[1]
+        size = self.n_agent * n_thread  # 从n_agent改为n_agent*n_thread适配向量环境
+        # encoding
+        h_out = f.relu(self.encoding(obs))  # (batch_size, n_agent, dim)
 
-        # 经过自己的GRU得到h yyx把GRU扔了！
-        # h_out = self.h(obs_encoding, h_in)  # (batch_size * n_agents, self.rnn_hidden_dim)
-        h_out = obs_encoding
-
-        # Hard Attention，GRU和GRUCell不同，输入的维度是(序列长度,batch_size, dim)
+        # Hard Attention，GRU和GRUCell不同，输入的维度是(序列长度, batch_size, dim)
         if self.hard:
             # Hard Attention前的准备
             h = h_out.reshape(-1, self.n_agent, self.rnn_hidden_dim)  # 把h转化出n_agents维度，(batch_size, n_agents, rnn_hidden_dim)
@@ -88,8 +83,10 @@ class G2AEmbedNet(nn.Module):
             hard_weights = hard_weights.permute(1, 0, 2, 3)
 
         else:
-            hard_weights = torch.ones((self.n_agent, size // self.n_agent, 1, self.n_agent - 1))
+            hard_weights = torch.ones((self.n_agent, size // self.n_agent, 1, self.n_agent - 1))  # 第二个维度是n_thread
             hard_weights = hard_weights.to(self.device)
+
+        print(f'当n_thread = {hard_weights.shape[1]}, hard_weights.sum() = {hard_weights.sum()}')
 
         # Soft Attention
         q = self.q(h_out).reshape(-1, self.n_agent, self.attention_dim)  # (batch_size, n_agents, self.attention_dim)
@@ -136,7 +133,6 @@ class G2ANetAgent(DPPOAgent):
         self.attention_dim = 32
 
         self.g2a_embed_net = G2AEmbedNet(obs_dim=agent_args.observation_dim,
-                             n_actions=self.act_dim,  # TODO 这个东西现在要改，有两维动作了，需要从标量改成数组
                              n_agent=agent_args.n_agent,
                              device=device,
                              rnn_hidden_dim=self.rnn_hidden_dim,

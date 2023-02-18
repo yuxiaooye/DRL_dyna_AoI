@@ -291,7 +291,7 @@ class EnvMobile():
         info['tx_satis_ratio'] = tx_satis_ratio
         info['energy_consuming'] = t_e / 10**6  # 单位：MJ
         info['energy_consuming_ratio'] = energy_consuming_ratio
-        info['QoI'] = min(aoi_satis_ratio, tx_satis_ratio) / (t_e/10**6)
+        info['QoI'] = min(aoi_satis_ratio, tx_satis_ratio) / (t_e/self.UAV_NUM/10**6)
 
         info['aoi_reward'] = np.mean(self.aoi_reward_list)
         info['aoi_penalty_reward'] = np.mean(self.aoi_penalty_reward_list) if len(self.aoi_penalty_reward_list) != 0 else 0
