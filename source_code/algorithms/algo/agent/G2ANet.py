@@ -11,7 +11,7 @@ from torch.optim import Adam
 class G2AEmbedNet(nn.Module):
     def __init__(self, obs_dim, n_agent, device,
                  hidden_dim=64, attention_dim=32, 
-                 hard=True, soft=True):
+                 hard=True, soft=True, tau=0.01):
         super(G2AEmbedNet, self).__init__()
         assert hard or soft, print('G2ANet原文hard和soft都做，我改为只做hard')
 
@@ -21,6 +21,7 @@ class G2AEmbedNet(nn.Module):
         self.attention_dim = attention_dim  # only used in soft
         self.hard = hard
         self.soft = soft
+        self.tau = tau
 
         # Encoding
         self.encoding = nn.Linear(obs_dim, self.hidden_dim)  # 对所有agent的obs解码
@@ -73,11 +74,11 @@ class G2AEmbedNet(nn.Module):
             h_hard = h_hard.permute(1, 0, 2)  # (batch_size * n_agents, n_agents - 1, hidden_dim * 2)
             h_hard = h_hard.reshape(-1, self.hidden_dim * 2)  # (batch_size * n_agents * (n_agents - 1), hidden_dim * 2)
 
-
             hard_weights = self.hard_encoding(h_hard)  # 将(6, 128)映射为(6, 2)
-            hard_weights = f.gumbel_softmax(hard_weights, tau=0.01)
+            hard_weights = f.gumbel_softmax(hard_weights, tau=self.tau)
             # print(hard_weights)
-            hard_weights = hard_weights[:, 1].view(-1, self.n_agent, 1, self.n_agent - 1)
+            # TODO 明天再check一下这里
+            hard_weights = hard_weights[:self.n_agent, :].view(-1, self.n_agent, 1, self.n_agent - 1)
             hard_weights = hard_weights.permute(1, 0, 2, 3)
 
         else:
@@ -170,7 +171,8 @@ class G2ANetAgent(DPPOAgent):
                                          device=device,
                                          hidden_dim=self.hidden_dim,
                                          attention_dim=self.attention_dim,
-                                         soft=False  # crucial!
+                                         soft=False,  # crucial!
+                                         tau=self.input_args.tau,
                                          ).to(device)
 
         pi_dict, v_dict = self.pi_args._toDict(), self.v_args._toDict()
