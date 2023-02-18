@@ -122,7 +122,7 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
             return Categorical(probs)
 
     def get_logp(self, s, a):
-        """  # TODO NEXT change here
+        """  #
         Requires input of [batch_size, n_agent, dim] or [n_agent, dim].
         Returns a tensor whose dim() == 3.
         """

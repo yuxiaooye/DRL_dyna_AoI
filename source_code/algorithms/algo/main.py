@@ -211,6 +211,7 @@ class OnPolicyRunner:
                                 episodic_aoi=sum(d['episodic_aoi'] for d in env_info) / len(env_info),
                                 aoi_satis_ratio=sum(d['aoi_satis_ratio'] for d in env_info) / len(env_info),
                                 tx_satis_ratio=sum(d['tx_satis_ratio'] for d in env_info) / len(env_info),
+                                energy_consuming=sum(d['energy_consuming'] for d in env_info) / len(env_info),
                                 energy_consuming_ratio=sum(d['energy_consuming_ratio'] for d in env_info) / len(env_info),
                                 aoi_reward=sum(d['aoi_reward'] for d in env_info) / len(env_info),
                                 aoi_penalty_reward=sum(d['aoi_penalty_reward'] for d in env_info) / len(env_info),

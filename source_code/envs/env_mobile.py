@@ -158,25 +158,25 @@ class EnvMobile():
         self.poi_position = copy.deepcopy(self.poi_mat[:, self.step_count, :])
 
 
-    def _uavs_access_users(self):
+    def _uavs_access_users(self, max_access_num):
         # 读: self.uav_position[uav_index]
         # 读: self.poi_position
         access_lists = []
         for uav_id, uav_pos in enumerate(self.uav_position):
             access_list = []
-            for poi_id, poi_pos in enumerate(self.poi_position):
-                rate, dis = self._get_data_rate(uav_pos, poi_pos)
-                if dis < self.COLLECT_RANGE:
-                    access_list.append((poi_id, rate))
-
+            # poi_id, rate, dis
+            triple = [(poi_id,) + self._get_data_rate(uav_pos, poi_pos) for poi_id, poi_pos in enumerate(self.poi_position)]
+            sorted_triple_in_range = sorted(
+                list(filter(lambda x: x[2] < self.COLLECT_RANGE, triple)), key=lambda x: x[2])
+            access_list = sorted_triple_in_range[:max_access_num[uav_id]+1]  # +1将0~8映射到1~9
             # 每个user实际分到的带宽需要平分
-            access_list = list(map(lambda x:(x[0], x[1]/len(access_list)), access_list))
+            access_list = list(map(lambda x: (x[0], x[1]/len(access_list), x[2]), access_list))
             access_lists.append(access_list)
         return access_lists
 
 
     def step(self, action):
-        action = [item[0] for item in action]  # TODO DASAP
+        action1, action2 = [item[0] for item in action], [item[1] for item in action]
 
         # 若max_episode_step=120, 则执行120次step方法。episode结束时保存120个poi和uav的位置点，而不是icde的121个，把poi、uav的初始位置扔掉！
         self.step_count += 1
@@ -186,7 +186,7 @@ class EnvMobile():
 
         # uav移动
         for uav_index in range(self.UAV_NUM):
-            new_x, new_y, distance, energy_consuming = self._cal_uav_next_pos(uav_index, action[uav_index])  # 调用关键函数，uav移动
+            new_x, new_y, distance, energy_consuming = self._cal_uav_next_pos(uav_index, action1[uav_index])  # 调用关键函数，uav移动
             Flag = self._judge_obstacle(self.uav_position[uav_index], (new_x, new_y))
             if not Flag:  # 如果出界，就不更新uav的位置
                 self.uav_position[uav_index] = (new_x, new_y)
@@ -195,13 +195,13 @@ class EnvMobile():
 
         # uav收集
         ## 确定uav的服务对象，元素是（poi_id，data rate）二元组
-        access_lists = self._uavs_access_users()
+        access_lists = self._uavs_access_users(action2)
 
         ## 计算各poi的总data rate
         sum_rates = np.zeros(self.POI_NUM)
 
         for uav_id, access_list in enumerate(access_lists):
-            for poi_id, rate in access_list:
+            for poi_id, rate, dis in access_list:
                 sum_rates[poi_id] += rate
 
 
@@ -223,7 +223,7 @@ class EnvMobile():
             # 当年戴总infocom2022的定义是收集前平均aoi减收集后平均aoi，和现在我用的一致
             rate_contribute_to_that_poi = np.zeros(self.UAV_NUM)
             for uav_id, access_list in enumerate(access_lists):
-                for pid, rate in access_list:
+                for pid, rate, dis in access_list:
                     if poi_id == pid:
                         # 收集aoi越大的user，奖励越大；rate/sum_rate相当于credit assignment
                         r = (before_reset / self.MAX_EPISODE_STEP) * (rate / sum_rate)
@@ -289,8 +289,9 @@ class EnvMobile():
         info['episodic_aoi'] = episodic_aoi
         info['aoi_satis_ratio'] = aoi_satis_ratio
         info['tx_satis_ratio'] = tx_satis_ratio
+        info['energy_consuming'] = t_e / 10**6  # 单位：MJ
         info['energy_consuming_ratio'] = energy_consuming_ratio
-        info['QoI'] = min(aoi_satis_ratio, tx_satis_ratio) / energy_consuming_ratio
+        info['QoI'] = min(aoi_satis_ratio, tx_satis_ratio) / (t_e/10**6)
 
         info['aoi_reward'] = np.mean(self.aoi_reward_list)
         info['aoi_penalty_reward'] = np.mean(self.aoi_penalty_reward_list) if len(self.aoi_penalty_reward_list) != 0 else 0
@@ -335,12 +336,6 @@ class EnvMobile():
         return new_x, new_y, distance, min(self.uav_energy[uav_index], energy_consume)
 
 
-    def _get_vector_by_theta(self, action):
-        theta = action[0] * np.pi
-        l = action[1] + 1
-        dx = l * np.cos(theta)
-        dy = l * np.sin(theta)
-        return dx, dy
 
     def _get_vector_by_action(self, action):
         single = 1.5
