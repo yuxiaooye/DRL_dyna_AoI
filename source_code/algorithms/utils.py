@@ -450,9 +450,6 @@ class LogServer(object):
         elif input_args.user=='yyx':
             key = '109d34efac30067df641a402ad8c505d5b80970f'
             entity = 'michaelye'
-        elif input_args.user=='ljh':
-            key = '429350bce54356ce8b8712f98d093b36f9c15895'
-            entity = 'ljjhhh'
         if not self.mute:
             '''wandb'''
             wandb.login(key=key)  # login to my own account first
