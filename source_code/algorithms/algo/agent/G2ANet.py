@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as f
 import numpy as np
 from algorithms.algo.agent.DPPO import DPPOAgent
-from algorithms.models import GaussianActor, GraphConvolutionalModel, MLP, CategoricalActor
+from algorithms.models import MLP, CategoricalActor
 from torch.optim import Adam
 
 '''输入所有agent的obs，输出表征模块后各agent的obs embedding（魔改仅删除了过decoding）'''
@@ -136,7 +136,7 @@ class G2ANetAgent(DPPOAgent):
         self.attention_dim = 32
 
         self.g2a_embed_net = G2AEmbedNet(obs_dim=agent_args.observation_dim,
-                             n_actions=self.act_dim,
+                             n_actions=self.act_dim,  # TODO 这个东西现在要改，有两维动作了，需要从标量改成数组
                              n_agent=agent_args.n_agent,
                              device=device,
                              rnn_hidden_dim=self.rnn_hidden_dim,

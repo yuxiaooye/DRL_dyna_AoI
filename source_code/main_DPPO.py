@@ -45,7 +45,6 @@ def getAlgArgs(run_args, input_args, env):
     assert input_args.algo in ['DPPO', 'CPPO', 'DMPO', 'IC3Net', 'IA2C', 'G2ANet', 'IPPO']
     # env_str = input_args.env[0].upper() + input_args.env[1:]
     config = importlib.import_module(f"algorithms.config.Mobile_{input_args.algo}")
-    # 在这里，得到了alg_args.agent_args.action_space
     alg_args = config.getArgs(run_args.radius_v, run_args.radius_pi, env, input_args=input_args)
     return alg_args
 
@@ -55,8 +54,8 @@ def initAgent(logger, device, agent_args, input_args):
 
 
 def override(alg_args, run_args, input_args, env):
-    if input_args.use_snrmap_shortcut:
-        # snr features数量， 直接shortcut到策略前一层，0代表不跳过
+    if input_args.use_snrmap:
+        # snr features数量， 直接shortcut到策略前一层，0代表不使用snrmap
         alg_args.agent_args.pi_args.snrmap_features = env.cell_num * env.cell_num
     else:
         alg_args.agent_args.pi_args.snrmap_features = 0
@@ -106,10 +105,12 @@ def override(alg_args, run_args, input_args, env):
         run_args.name += f'_UAVNum={input_args.uav_num}'
     if not input_args.fixed_col_time:
         run_args.name += f'_NotFixedColTime'
-    if input_args.amount_prop_to_SNRth:
-        run_args.name += f'_AmountPropToSNRth'
     if input_args.aoith != 60:
         run_args.name += f'_AoIth={input_args.aoith}'
+    if input_args.txth != 5:
+        run_args.name += f'_TXth={input_args.txth}'
+    if input_args.uav_height != 100:
+        run_args.name += f'_UAVHeight={input_args.uav_height}'
 
     ## MDP
     if input_args.max_episode_step != 120:
@@ -118,8 +119,6 @@ def override(alg_args, run_args, input_args, env):
         run_args.name += f'_FutureObs={input_args.future_obs}'
     if input_args.use_snrmap:
         run_args.name += f'_UseSNRMAP'
-    if input_args.use_snrmap_shortcut:
-        run_args.name += f'_UseSNRMAPShortcut'
 
     # tune algo
     if input_args.lr is not None:
@@ -182,15 +181,14 @@ def parse_args():
     parser.add_argument('--update_num', type=int, default=10)
     parser.add_argument('--uav_num', type=int, default=3)
     parser.add_argument('--fixed-col-time', action='store_false')
-    parser.add_argument('--amount_prop_to_SNRth', action='store_true')
     parser.add_argument('--aoith', default=60, type=int)
-    ## 0216
-    parser.add_argument('--weighted_r', action='store_true')
+    parser.add_argument('--txth', default=5, type=int)
+    parser.add_argument('--uav_height', default=100, type=int)
+
     ## MDP
     parser.add_argument('--max_episode_step', type=int, default=120)
     parser.add_argument('--future_obs', type=int, default=0)
-    parser.add_argument('--use_snrmap', action='store_true')
-    parser.add_argument('--use_snrmap_shortcut', action='store_true')
+    parser.add_argument('--use_snrmap', action='store_true')  # shrotcut are always used
     args = parser.parse_args()
 
     if args.multi_mlp:
@@ -235,16 +233,9 @@ elif input_args.algo == 'IPPO':
 
 if input_args.env == 'Mobile':
     from envs.env_mobile import EnvMobile
-
     env_fn_train, env_fn_test = EnvMobile, EnvMobile
-elif input_args.env == 'MobileHao':
-    from envs.env_mobile_hao import EnvMobileHao
-
-    env_fn_train, env_fn_test = EnvMobileHao, EnvMobileHao
-elif input_args.env == 'MobileEveryStepUpdate':
-    from envs.env_mobile_EveryStepUpdate import EnvMobileEveryStepUpdate
-
-    env_fn_train, env_fn_test = EnvMobileEveryStepUpdate, EnvMobileEveryStepUpdate
+else:
+    raise NotImplementedError
 
 env_args = {  # 这里环境类的参数抄昊宝
     "emergency_threshold": 100,
@@ -255,6 +246,8 @@ env_args = {  # 这里环境类的参数抄昊宝
     "update_num": input_args.update_num,
     "uav_num": input_args.uav_num,
     "AoI_THRESHOLD": input_args.aoith,
+    "RATE_THRESHOLD": input_args.txth,
+    "uav_height": input_args.uav_height,
 }
 
 run_args = getRunArgs(input_args)

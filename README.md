@@ -11,8 +11,6 @@
 │   │   │   ├── main.py  # OnPolicyRunner类定义，负责智能体与环境交互
 │   ├── envs  
 │   │   ├── env_mobile.py  # generate-at-will的aoi定义的场景
-│   │   ├── env_mobile_hao.py  # 昊宝ton的aoi定义的场景
-│   │   ├── env_mobile_EveryStepUpdate.py  # 介于以上两者之间，每步都生成新包的场景
 │   ├── env_configs  # 环境参数
 │   └── tools  # 功能脚本，预处理和后处理
 │   │   ├── post

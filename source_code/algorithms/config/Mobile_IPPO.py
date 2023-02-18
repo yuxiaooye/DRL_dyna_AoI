@@ -30,11 +30,8 @@ def getArgs(radius_v, radius_pi, env, input_args=None):
 
     agent_args = Config()
 
-    # 下面这个值后续会被读，但env_ucs环境没有neighbor_mask属性，
-    # 所以仿照catchup，在这里临时硬编码一个neighbor_mask
-    from envs.neighbor_graph import get_adj
-
     agent_args.n_agent = env.UAV_NUM
+    from envs.neighbor_graph import get_adj
     agent_args.adj = get_adj(env.UAV_NUM)
     agent_args.gamma = 0.99
     agent_args.lamda = 0.5
@@ -72,8 +69,10 @@ def getArgs(radius_v, radius_pi, env, input_args=None):
     pi_args = Config()
     pi_args.network = MLP
     pi_args.activation = torch.nn.ReLU
-    # pi_args.sizes = [-1, 64, 64, agent_args.action_space['uav'].n - 1 + agent_args.action_space['car'].n]
-    pi_args.sizes = [-1, 64, 64, 9]  # 9是硬编码的离散动作数
+    # 最后分两个head 分别输出两个离散动作维度上9个选择、10个选择的概率分布
+    pi_args.sizes = [-1, 64, 64]  # 9是硬编码的离散动作数
+    pi_args.branchs = [env.action_space[0].n, env.action_space[1].n]
+    pi_args.have_last_branch = False
     pi_args.squash = False
     agent_args.pi_args = pi_args
 

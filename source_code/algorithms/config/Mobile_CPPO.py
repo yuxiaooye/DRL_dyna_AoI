@@ -6,7 +6,7 @@ from algorithms.models import MLP
 from algorithms.utils import Config
 
 
-def getArgs(radius_v, radius_pi, env):
+def getArgs(radius_v, radius_pi, env, input_args=None):
 
     alg_args = Config()
     alg_args.n_iter = 5000  # 25000
@@ -31,15 +31,10 @@ def getArgs(radius_v, radius_pi, env):
     alg_args.model_update_length = 2
 
     agent_args = Config()
-    tmp_neighbor_mask = np.array(
-        [
-            [0, 1, 0],
-            [1, 0, 1],
-            [0, 1, 0],
-        ]
-    )
-    agent_args.adj = tmp_neighbor_mask
-    agent_args.n_agent = agent_args.adj.shape[0]
+
+    agent_args.n_agent = env.UAV_NUM
+    from envs.neighbor_graph import get_adj
+    agent_args.adj = get_adj(env.UAV_NUM, fully_collect=True)
     agent_args.gamma = 0.99
     agent_args.lamda = 0.5
     agent_args.clip = 0.2
@@ -63,7 +58,7 @@ def getArgs(radius_v, radius_pi, env):
     agent_args.observation_dim = env.observation_space['Box'].shape[1]  # 标量1715，意为每个agent的obs的向量维度
     agent_args.action_space = env.action_space
     # agent_args.adj = env.neighbor_mask
-    agent_args.radius_v = radius_v
+    agent_args.radius_v = radius_v  # 保持default的1就可以，全联通图上agent到所有其他人的距离都是1
     agent_args.radius_pi = radius_pi
     agent_args.squeeze = True
 
@@ -86,7 +81,9 @@ def getArgs(radius_v, radius_pi, env):
     pi_args = Config()
     pi_args.network = MLP
     pi_args.activation = torch.nn.ReLU
-    pi_args.sizes = [-1, 64, 64, 9]
+    pi_args.sizes = [-1, 64, 64]  # 9是硬编码的离散动作数
+    pi_args.branchs = [env.action_space[0].n, env.action_space[1].n]
+    pi_args.have_last_branch = False
     # print('aaa=',agent_args.action_space.n)
     pi_args.squash = False
     agent_args.pi_args = pi_args

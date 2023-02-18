@@ -49,6 +49,7 @@ class Config(object):
             "scale": 100,
             "uav_speed": 20,
             "time_slot": 20,
+            "uav_height": 100,
 
             # Energy
             "initial_energy": 719280.0,
