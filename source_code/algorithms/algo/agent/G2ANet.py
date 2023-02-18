@@ -10,33 +10,33 @@ from torch.optim import Adam
 '''输入所有agent的obs，输出表征模块后各agent的obs embedding'''
 class G2AEmbedNet(nn.Module):
     def __init__(self, obs_dim, n_agent, device,
-                 rnn_hidden_dim=64, attention_dim=32,
+                 hidden_dim=64, attention_dim=32, 
                  hard=True, soft=True):
         super(G2AEmbedNet, self).__init__()
         assert hard or soft, print('G2ANet原文hard和soft都做，我改为只做hard')
 
         self.n_agent = n_agent
         self.device = device
-        self.rnn_hidden_dim = rnn_hidden_dim
-        self.attention_dim = attention_dim
+        self.hidden_dim = hidden_dim
+        self.attention_dim = attention_dim  # only used in soft
         self.hard = hard
         self.soft = soft
 
         # Encoding
-        self.encoding = nn.Linear(obs_dim, self.rnn_hidden_dim)  # 对所有agent的obs解码
+        self.encoding = nn.Linear(obs_dim, self.hidden_dim)  # 对所有agent的obs解码
 
         # Hard
         # GRU输入[[h_i,h_1],[h_i,h_2],...[h_i,h_n]]与[0,...,0]，输出[[h_1],[h_2],...,[h_n]]与[h_n]， h_j表示了agent j与agent i的关系
-        # 输入的iputs维度为(n_agents - 1, batch_size * n_agents, rnn_hidden_dim * 2)，
+        # 输入的iputs维度为(n_agents - 1, batch_size * n_agents, hidden_dim * 2)，
         # 即对于batch_size条数据，输入每个agent与其他n_agents - 1个agents的hidden_state的连接
-        self.hard_bi_GRU = nn.GRU(self.rnn_hidden_dim * 2, self.rnn_hidden_dim, bidirectional=True)
+        self.hard_bi_GRU = nn.GRU(self.hidden_dim * 2, self.hidden_dim, bidirectional=True)
         # 对h_j进行分析，得到agent j对于agent i的权重，输出两维，经过gumble_softmax后取其中一维即可，如果是0则不考虑agent j，如果是1则考虑
-        self.hard_encoding = nn.Linear(self.rnn_hidden_dim * 2, 2)  # 乘2因为是双向GRU，hidden_state维度为2 * hidden_dim
+        self.hard_encoding = nn.Linear(self.hidden_dim * 2, 2)  # 乘2因为是双向GRU，hidden_state维度为2 * hidden_dim
 
         # Soft
-        self.q = nn.Linear(self.rnn_hidden_dim, self.attention_dim, bias=False)
-        self.k = nn.Linear(self.rnn_hidden_dim, self.attention_dim, bias=False)
-        self.v = nn.Linear(self.rnn_hidden_dim, self.attention_dim)
+        self.q = nn.Linear(self.hidden_dim, self.attention_dim, bias=False)
+        self.k = nn.Linear(self.hidden_dim, self.attention_dim, bias=False)
+        self.v = nn.Linear(self.hidden_dim, self.attention_dim)
 
 
     def forward(self, obs):
@@ -51,31 +51,30 @@ class G2AEmbedNet(nn.Module):
 
         # Hard Attention，GRU和GRUCell不同，输入的维度是(序列长度, batch_size, dim)
         if self.hard:
-            # Hard Attention前的准备
-            h = h_out.reshape(-1, self.n_agent, self.rnn_hidden_dim)  # 把h转化出n_agents维度，(batch_size, n_agents, rnn_hidden_dim)
+            '''Hard Attention前的准备(没过网络只玩维度)'''
+            h = h_out
             input_hard = []
             for i in range(self.n_agent):
-                h_i = h[:, i]  # (batch_size, rnn_hidden_dim)
+                h_i = h[:, i]  # (batch_size, hidden_dim)
                 h_hard_i = []
                 for j in range(self.n_agent):  # 对于agent i，把自己的h_i与其他agent的h分别拼接
                     if j != i:
                         h_hard_i.append(torch.cat([h_i, h[:, j]], dim=-1))
-                # j 循环结束之后，h_hard_i是一个list里面装着n_agents - 1个维度为(batch_size, rnn_hidden_dim * 2)的tensor
+                # j 循环结束之后，h_hard_i是一个list里面装着n_agents - 1个维度为(batch_size, hidden_dim * 2)的tensor
                 h_hard_i = torch.stack(h_hard_i, dim=0)
                 input_hard.append(h_hard_i)
-            # i循环结束之后，input_hard是一个list里面装着n_agents个维度为(n_agents - 1, batch_size, rnn_hidden_dim * 2)的tensor
+            # i循环结束之后，input_hard是一个list里面装着n_agents个维度为(n_agents - 1, batch_size, hidden_dim * 2)的tensor
             input_hard = torch.stack(input_hard, dim=-2)
-            # 最终得到维度(n_agents - 1, batch_size * n_agents, rnn_hidden_dim * 2)，可以输入了
-            input_hard = input_hard.view(self.n_agent - 1, -1, self.rnn_hidden_dim * 2)
+            # 最终得到维度(n_agents - 1, batch_size * n_agents, hidden_dim * 2)，可以输入了
+            input_hard = input_hard.view(self.n_agent - 1, -1, self.hidden_dim * 2)
 
-            h_hard = torch.zeros((2 * 1, size, self.rnn_hidden_dim))  # 因为是双向GRU，每个GRU只有一层，所以第一维是2 * 1
-            h_hard = h_hard.to(self.device)
-            h_hard, _ = self.hard_bi_GRU(input_hard, h_hard)  # (n_agents - 1,batch_size * n_agents,rnn_hidden_dim * 2)
-            h_hard = h_hard.permute(1, 0, 2)  # (batch_size * n_agents, n_agents - 1, rnn_hidden_dim * 2)
-            h_hard = h_hard.reshape(-1, self.rnn_hidden_dim * 2)  # (batch_size * n_agents * (n_agents - 1), rnn_hidden_dim * 2)
+            h_hard = torch.zeros((2 * 1, size, self.hidden_dim)).to(self.device)  # 因为是双向GRU，每个GRU只有一层，所以第一维是2 * 1
+            h_hard, _ = self.hard_bi_GRU(input_hard, h_hard)  # (n_agents - 1, batch_size * n_agents, hidden_dim * 2)
+            h_hard = h_hard.permute(1, 0, 2)  # (batch_size * n_agents, n_agents - 1, hidden_dim * 2)
+            h_hard = h_hard.reshape(-1, self.hidden_dim * 2)  # (batch_size * n_agents * (n_agents - 1), hidden_dim * 2)
 
-            # 得到hard权重, (n_agents, batch_size, 1,  n_agents - 1)，多出一个维度，下面加权求和的时候要用
-            hard_weights = self.hard_encoding(h_hard)
+
+            hard_weights = self.hard_encoding(h_hard)  # 将(6, 128)映射为(6, 2)
             hard_weights = f.gumbel_softmax(hard_weights, tau=0.01)
             # print(hard_weights)
             hard_weights = hard_weights[:, 1].view(-1, self.n_agent, 1, self.n_agent - 1)
@@ -131,20 +130,20 @@ class G2ANetHardSoftAgent(DPPOAgent):
     def __init__(self, logger, device, agent_args, input_args):
         DPPOAgent.__init__(self, logger, device, agent_args, input_args)
 
-        self.rnn_hidden_dim = 64
+        self.hidden_dim = 64
         self.attention_dim = 32
 
         self.g2a_embed_net = G2AEmbedNet(obs_dim=agent_args.observation_dim,
                              n_agent=agent_args.n_agent,
                              device=device,
-                             rnn_hidden_dim=self.rnn_hidden_dim,
+                             hidden_dim=self.hidden_dim,
                              attention_dim=self.attention_dim
                              ).to(device)
 
 
         pi_dict, v_dict = self.pi_args._toDict(), self.v_args._toDict()
-        pi_dict['sizes'][0] = self.rnn_hidden_dim + self.attention_dim  # 修改维度
-        v_dict['sizes'][0] = self.rnn_hidden_dim + self.attention_dim  # 修改维度
+        pi_dict['sizes'][0] = self.hidden_dim + self.attention_dim  # 修改维度
+        v_dict['sizes'][0] = self.hidden_dim + self.attention_dim  # 修改维度
         self.actors = nn.ModuleList()
         self.vs = nn.ModuleList()
         for i in range(self.n_agent):
@@ -160,13 +159,16 @@ class G2ANetAgent(DPPOAgent):
     def __init__(self, logger, device, agent_args, input_args):
         DPPOAgent.__init__(self, logger, device, agent_args, input_args)
 
-        self.rnn_hidden_dim = 64
+        if input_args.g2a_hidden_dim is None:
+            self.hidden_dim = 64
+        else:
+            self.hidden_dim = input_args.g2a_hidden_dim
         self.attention_dim = 32
 
         self.g2a_embed_hard_net = G2AEmbedNet(obs_dim=agent_args.observation_dim,
                                          n_agent=agent_args.n_agent,
                                          device=device,
-                                         rnn_hidden_dim=self.rnn_hidden_dim,
+                                         hidden_dim=self.hidden_dim,
                                          attention_dim=self.attention_dim,
                                          soft=False  # crucial!
                                          ).to(device)

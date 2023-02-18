@@ -48,6 +48,15 @@ python main_DPPO.py --algo G2ANet --use_snrmap
 - `--dataset foo`：选择使用数据集 foo 可选NCSU或KAIST
 - `--n_thread n`：设置多线程环境数为n，加速训练
 
+环境：
+- `--poi_num n`：poi个数，不使用该参数时为默认数量，注意NCSU只能填50，KAIST只能填122
+
+调整五点图自变量：
+- `--uav_num n`：uav个数
+- `--aoith n`：aoi阈值，单位为timeslot
+- `--txth n`：tx阈值，单位为Mbps
+- `--update_num n`：天线个数，一个uav在一个timeslot里最多服务n个user
+
 更多命令行参数的使用方式参见代码。
 
 ## Training outputs 

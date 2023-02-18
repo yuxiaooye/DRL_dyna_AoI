@@ -114,6 +114,8 @@ def override(alg_args, run_args, input_args, env):
         run_args.name += f'_TXth={input_args.txth}'
     if input_args.uav_height != 100:
         run_args.name += f'_UAVHeight={input_args.uav_height}'
+    if input_args.poi_num is not None:
+        run_args.name += f'_Users={input_args.poi_num}'
 
     ## MDP
     if input_args.max_episode_step != 120:
@@ -132,13 +134,15 @@ def override(alg_args, run_args, input_args, env):
         alg_args.agent_args.lr_v = input_args.lr_v
     if input_args.use_stack_frame:
         run_args.name += f'_UseStackFrame'
-    if not input_args.use_extended_value:
-        run_args.name += f'_NotUseExtendedValue'
-    if input_args.use_mlp_model:
-        run_args.name += f'_MLPModel'
-    if input_args.multi_mlp:
-        run_args.name += f'_MultiMLP'
-        
+    if input_args.g2a_hidden_dim != 64:
+        run_args.name += f'_G2AHiddenDim={input_args.g2a_hidden_dim}'
+    # if not input_args.use_extended_value:
+    #     run_args.name += f'_NotUseExtendedValue'
+    # if input_args.use_mlp_model:
+    #     run_args.name += f'_MLPModel'
+    # if input_args.multi_mlp:
+    #     run_args.name += f'_MultiMLP'
+
     run_args.name += '_'+input_args.tag
     final = '../{}/{}'.format(input_args.output_dir, run_args.name)
     run_args.output_dir = final
@@ -161,6 +165,7 @@ def parse_args():
     parser.add_argument('--algo', type=str, required=False, default='IPPO', help="algorithm(DMPO/IC3Net/CPPO/DPPO/IA2C/IPPO) ")
     parser.add_argument('--device', type=str, required=False, default='cuda:0', help="device(cpu/cuda:0/cuda:1/...) ")
     parser.add_argument("--dataset", type=str, default='NCSU', choices=['NCSU', 'KAIST', 'purdue'])
+    parser.add_argument("--poi_num", type=int, default=None)
     parser.add_argument("--tag", type=str, default='', help='每个单独实验的备注')
     # dirs
     parser.add_argument("--output_dir", type=str, default='runs/debug', help="which fold to save under 'runs/'")
@@ -174,9 +179,10 @@ def parse_args():
     parser.add_argument('--lr', type=float)
     parser.add_argument('--lr_v', type=float)
     parser.add_argument('--use-stack-frame', action='store_true')
-    parser.add_argument('--use_extended_value', action='store_false', help='反逻辑，仅用于DPPO')
-    parser.add_argument('--use-mlp-model', action='store_true', help='将model改为最简单的mlp，仅用于DMPO')
-    parser.add_argument('--multi-mlp', action='store_true', help='在model中分开预测obs中不同类别的信息，仅用于DMPO')
+    # parser.add_argument('--use_extended_value', action='store_false', help='反逻辑，仅用于DPPO')
+    # parser.add_argument('--use-mlp-model', action='store_true', help='将model改为最简单的mlp，仅用于DMPO')
+    # parser.add_argument('--multi-mlp', action='store_true', help='在model中分开预测obs中不同类别的信息，仅用于DMPO')
+    parser.add_argument('--g2a_hidden_dim', type=int, default=64, help='在model中分开预测obs中不同类别的信息，仅用于DMPO')
     # tune env
     ## setting
     parser.add_argument('--fixed-range', action='store_false')  # 重要，sensing range现在固定了
@@ -197,8 +203,8 @@ def parse_args():
     parser.add_argument('--use_snrmap', action='store_true')  # shrotcut are always used
     args = parser.parse_args()
 
-    if args.multi_mlp:
-        assert args.use_mlp_model
+    # if args.multi_mlp:
+    #     assert args.use_mlp_model
 
     if args.debug:
         assert args.group == 'debug'
@@ -246,7 +252,7 @@ else:
     raise NotImplementedError
 
 env_args = {  # 这里环境类的参数抄昊宝
-    "emergency_threshold": 100,
+    "emergency_threshold": 100, 
     "max_episode_step": input_args.max_episode_step,
     "collect_range": input_args.snr,
     "initial_energy": input_args.init_energy,
@@ -257,6 +263,8 @@ env_args = {  # 这里环境类的参数抄昊宝
     "RATE_THRESHOLD": input_args.txth,
     "uav_height": input_args.uav_height,
 }
+if input_args.poi_num is not None:
+    env_args["poi_num"] = input_args.poi_num
 
 run_args = getRunArgs(input_args)
 print('debug =', run_args.debug)

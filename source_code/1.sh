@@ -1,7 +1,7 @@
 # !/bin/sh
-source activate yyx_adept
-group='0218-ablation'
-nohup python -u main_DPPO.py --algo IPPO --group ${group} --n_thread 16 --device cuda:2 &
-nohup python -u main_DPPO.py --algo IPPO --use_snrmap --group ${group} --n_thread 16 --device cuda:2 &
-nohup python -u main_DPPO.py --algo G2ANet --group ${group} --n_thread 16 --device cuda:2 &
-nohup python -u main_DPPO.py --algo G2ANet --use_snrmap --group ${group} --n_thread 16 --device cuda:2 &
+source activate yyx_ishen
+group='0218-NCSU50user-tuneG2A'
+for g2a_hidden_dim in 32 64 96 128;
+do
+nohup python -u main_DPPO.py --group ${group} --poi_num 50 --algo G2ANet --g2a_hidden_dim ${g2a_hidden_dim}  --user yyx --device cuda:1 &
+done

@@ -13,6 +13,7 @@ class Config(object):
         for key in env_args.keys():
             self.dict[key] = env_args[key]
 
+
     def __call__(self, attr):
         assert attr in self.dict.keys(), print('key error[', attr, ']')
         return self.dict[attr]
