@@ -446,18 +446,19 @@ class LogServer(object):
         self.mute = run_args.debug or run_args.mute_wandb  # wandb太慢，debug时不用
         if input_args.user=='wh':
             key = '4005a92bfae3a8351f46946688fba35856fe6d79'
-            entity = '997009553'
-            project= 'jsac2023'
+            entity = 'wh'
         elif input_args.user=='yyx':
             key = '109d34efac30067df641a402ad8c505d5b80970f'
             entity = 'michaelye'
-            project = input_args.env
+        elif input_args.user=='ljh':
+            key = '429350bce54356ce8b8712f98d093b36f9c15895'
+            entity = 'ljjhhh'
         if not self.mute:
             '''wandb'''
             wandb.login(key=key)  # login to my own account first
             run = wandb.init(
                 entity=entity,
-                project= project,
+                project=input_args.env,
                 config={"run_args": run_args._toDict(recursive=True),
                         "algo_args": algo_args._toDict(recursive=True),
                         "input_args": vars(input_args),
