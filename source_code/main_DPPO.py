@@ -42,9 +42,12 @@ def getRunArgs(input_args):
 
 def getAlgArgs(run_args, input_args, env):
     assert input_args.env.startswith('Mobile')
-    assert input_args.algo in ['DPPO', 'CPPO', 'DMPO', 'IC3Net', 'IA2C', 'G2ANet', 'IPPO']
-    # env_str = input_args.env[0].upper() + input_args.env[1:]
-    config = importlib.import_module(f"algorithms.config.Mobile_{input_args.algo}")
+    assert input_args.algo in ['DPPO', 'CPPO', 'IPPO', 'DMPO',
+                               'IC3Net', 'IA2C', 'G2ANet', 'G2ANe2']
+    filename = input_args.algo
+    if filename == 'G2ANet2':
+        filename = 'G2ANet'
+    config = importlib.import_module(f"algorithms.config.Mobile_{filename}")
     alg_args = config.getArgs(run_args.radius_v, run_args.radius_pi, env, input_args=input_args)
     return alg_args
 
@@ -231,6 +234,8 @@ elif input_args.algo == 'DMPO':
     from algorithms.algo.agent.DMPO import DMPOAgent as agent_fn
 elif input_args.algo == 'G2ANet':
     from algorithms.algo.agent.G2ANet import G2ANetAgent as agent_fn
+elif input_args.algo == 'G2ANet2':
+    from algorithms.algo.agent.G2ANet import G2ANetHardSoftAgent as agent_fn
 elif input_args.algo == 'IPPO':
     from algorithms.algo.agent.IPPO import IPPOAgent as agent_fn
 

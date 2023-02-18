@@ -33,18 +33,18 @@ xhost +
 docker run -it --privileged --net=host --ipc=host --device=/dev/dri:/dev/dri -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=$DISPLAY --gpus all --name test_mcs linc/mcs:drl_dyna_aoi-v1 /bin/bash
 ```
 
-启动训练：
+训练DRL-PCN：
 
 ```sh
 cd source_code
-python main_DPPO.py
+python main_DPPO.py --algo G2ANet --use_snrmap
 ```
 
 命令行参数：
 
 - `--debug`：开启debug模式，快速验证代码全流程无bug，将实验结果存入`runs/debug`路径
 - `--group foo`： 将实验结果存入`runs/foo`路径
-- `--algo foo`：选择使用算法foo
+- `--algo foo`：选择使用方法foo，默认方法为IPPO
 - `--dataset foo`：选择使用数据集 foo 可选NCSU或KAIST
 - `--n_thread n`：设置多线程环境数为n，加速训练
 

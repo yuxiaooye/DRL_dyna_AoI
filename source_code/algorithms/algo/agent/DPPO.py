@@ -76,7 +76,8 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
         self.pi_args = agent_args.pi_args
         self.v_args = agent_args.v_args
 
-        if input_args.algo not in ('G2ANet', 'IPPO'):
+        if input_args.algo not in ('G2ANet', 'G2ANet2', 'IPPO'):
+
             self.collect_pi, self.actors = self._init_actors()  # collect_pi和collect_v应该一样吧？
             self.collect_v, self.vs = self._init_vs()
             self.optimizer_v = Adam(self.vs.parameters(), lr=self.lr_v)
@@ -85,20 +86,32 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
     def get_networked_s(self, s, which_net):
         if self.input_args.algo == 'IPPO':
             return s
-        if self.input_args.algo == 'G2ANet':
+        if self.input_args.algo == 'G2ANet2':
             return self.g2a_embed_net(s)
+        if self.input_args.algo == 'G2ANet':  # 拿到hard_att的邻居图后，根据邻居图对obs取并集
+            hard_atts = self.g2a_embed_hard_net(s)
+            hard_atts = hard_atts.squeeze(-2)  # shape = (agent, n_thread, agent-1)
+            n_thread = hard_atts.shape[1]
+            ans_s = []
+            for i in range(self.n_agent):
+                hard_att = hard_atts[i]
+                # 添加对自己的hard-att一定是1的维度
+                hard_att = torch.cat([hard_att[:, :i], torch.ones(n_thread, 1).to(self.device), hard_att[:, i:]], dim=-1)
+                shared_s = s * hard_att.unsqueeze(-1)  # mask后仅邻居的状态可见
+                shared_s = torch.max(shared_s, dim=1)[0]  # 取并集
+                ans_s.append(shared_s)
+            return ans_s
 
         assert which_net in ('pi', 'v')
         if self.use_extended_value:
             s = self.collect_pi.gather(s) if which_net == 'pi' else self.collect_v.gather(s)
         else:
-            n = s.shape[1]
-            assert n == self.n_agent
-            s = [s[:, i, :] for i in range(n)]
+            assert s.shape[1] == self.n_agent
+            s = [s[:, i, :] for i in range(self.n_agent)]
         return s
 
     def s_for_agent(self, s, i):
-        if self.input_args.algo in ('G2ANet', 'IPPO'):
+        if self.input_args.algo in ('G2ANet2', 'IPPO'):
             return s[:, i, :]
         return s[i]
 
@@ -122,7 +135,7 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
             return Categorical(probs)
 
     def get_logp(self, s, a):
-        """  #
+        """
         Requires input of [batch_size, n_agent, dim] or [n_agent, dim].
         Returns a tensor whose dim() == 3.
         """

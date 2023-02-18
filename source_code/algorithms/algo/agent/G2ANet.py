@@ -7,22 +7,23 @@ from algorithms.algo.agent.DPPO import DPPOAgent
 from algorithms.models import MLP, CategoricalActor
 from torch.optim import Adam
 
-'''输入所有agent的obs，输出表征模块后各agent的obs embedding（魔改仅删除了过decoding）'''
+'''输入所有agent的obs，输出表征模块后各agent的obs embedding'''
 class G2AEmbedNet(nn.Module):
     def __init__(self, obs_dim, n_agent, device,
-                 rnn_hidden_dim=64, attention_dim=32, hard=True):
+                 rnn_hidden_dim=64, attention_dim=32,
+                 hard=True, soft=True):
         super(G2AEmbedNet, self).__init__()
+        assert hard or soft, print('G2ANet原文hard和soft都做，我改为只做hard')
 
         self.n_agent = n_agent
         self.device = device
         self.rnn_hidden_dim = rnn_hidden_dim
         self.attention_dim = attention_dim
         self.hard = hard
+        self.soft = soft
 
         # Encoding
         self.encoding = nn.Linear(obs_dim, self.rnn_hidden_dim)  # 对所有agent的obs解码
-        # 把rnn扔了！
-        # self.h = nn.GRUCell(self.rnn_hidden_dim, self.rnn_hidden_dim)  # 每个agent根据自己的obs编码得到hidden_state，用于记忆之前的obs
 
         # Hard
         # GRU输入[[h_i,h_1],[h_i,h_2],...[h_i,h_n]]与[0,...,0]，输出[[h_1],[h_2],...,[h_n]]与[h_n]， h_j表示了agent j与agent i的关系
@@ -37,8 +38,6 @@ class G2AEmbedNet(nn.Module):
         self.k = nn.Linear(self.rnn_hidden_dim, self.attention_dim, bias=False)
         self.v = nn.Linear(self.rnn_hidden_dim, self.attention_dim)
 
-        # Decoding 输入自己的h_i与x_i，输出自己动作的概率分布
-        # self.decoding = nn.Linear(self.rnn_hidden_dim + self.attention_dim, n_actions)
 
     def forward(self, obs):
         '''
@@ -86,46 +85,49 @@ class G2AEmbedNet(nn.Module):
             hard_weights = torch.ones((self.n_agent, size // self.n_agent, 1, self.n_agent - 1))  # 第二个维度是n_thread
             hard_weights = hard_weights.to(self.device)
 
-        print(f'当n_thread = {hard_weights.shape[1]}, hard_weights.sum() = {hard_weights.sum()}')
+        # 已验证邻居关系在一个episode里动态变化
+        # print(f'当n_thread = {hard_weights.shape[1]}, hard_weights.sum() = {hard_weights.sum()}')
 
         # Soft Attention
-        q = self.q(h_out).reshape(-1, self.n_agent, self.attention_dim)  # (batch_size, n_agents, self.attention_dim)
-        k = self.k(h_out).reshape(-1, self.n_agent, self.attention_dim)  # (batch_size, n_agents, self.attention_dim)
-        v = f.relu(self.v(h_out)).reshape(-1, self.n_agent, self.attention_dim)  # (batch_size, n_agents, self.attention_dim)
-        x = []
-        for i in range(self.n_agent):
-            q_i = q[:, i].view(-1, 1, self.attention_dim)  # agent i的q，(batch_size, 1, self.attention_dim)
-            k_i = [k[:, j] for j in range(self.n_agent) if j != i]  # 对于agent i来说，其他agent的k
-            v_i = [v[:, j] for j in range(self.n_agent) if j != i]  # 对于agent i来说，其他agent的v
+        if self.soft:
+            q = self.q(h_out).reshape(-1, self.n_agent, self.attention_dim)  # (batch_size, n_agents, self.attention_dim)
+            k = self.k(h_out).reshape(-1, self.n_agent, self.attention_dim)  # (batch_size, n_agents, self.attention_dim)
+            v = f.relu(self.v(h_out)).reshape(-1, self.n_agent, self.attention_dim)  # (batch_size, n_agents, self.attention_dim)
+            x = []
+            for i in range(self.n_agent):
+                q_i = q[:, i].view(-1, 1, self.attention_dim)  # agent i的q，(batch_size, 1, self.attention_dim)
+                k_i = [k[:, j] for j in range(self.n_agent) if j != i]  # 对于agent i来说，其他agent的k
+                v_i = [v[:, j] for j in range(self.n_agent) if j != i]  # 对于agent i来说，其他agent的v
 
-            k_i = torch.stack(k_i, dim=0)  # (n_agents - 1, batch_size, self.attention_dim)
-            k_i = k_i.permute(1, 2, 0)  # 交换三个维度，变成(batch_size, self.attention_dim， n_agents - 1)
-            v_i = torch.stack(v_i, dim=0)
-            v_i = v_i.permute(1, 2, 0)
+                k_i = torch.stack(k_i, dim=0)  # (n_agents - 1, batch_size, self.attention_dim)
+                k_i = k_i.permute(1, 2, 0)  # 交换三个维度，变成(batch_size, self.attention_dim， n_agents - 1)
+                v_i = torch.stack(v_i, dim=0)
+                v_i = v_i.permute(1, 2, 0)
 
-            # (batch_size, 1, attention_dim) * (batch_size, attention_dim，n_agents - 1) = (batch_size, 1，n_agents - 1)
-            score = torch.matmul(q_i, k_i)
+                # (batch_size, 1, attention_dim) * (batch_size, attention_dim，n_agents - 1) = (batch_size, 1，n_agents - 1)
+                score = torch.matmul(q_i, k_i)
 
-            # 归一化
-            scaled_score = score / np.sqrt(self.attention_dim)
+                # 归一化
+                scaled_score = score / np.sqrt(self.attention_dim)
 
-            # softmax得到权重
-            soft_weight = f.softmax(scaled_score, dim=-1)  # (batch_size，1, n_agents - 1)
+                # softmax得到权重
+                soft_weight = f.softmax(scaled_score, dim=-1)  # (batch_size，1, n_agents - 1)
 
-            # 加权求和，注意三个矩阵的最后一维是n_agents - 1维度，得到(batch_size, self.attention_dim)
-            x_i = (v_i * soft_weight * hard_weights[i]).sum(dim=-1)
-            x.append(x_i)
+                # 加权求和，注意三个矩阵的最后一维是n_agents - 1维度，得到(batch_size, self.attention_dim)
+                x_i = (v_i * soft_weight * hard_weights[i]).sum(dim=-1)
+                x.append(x_i)
 
-        # 合并每个agent的h与x
-        # 这里暂时魔改
-        x = torch.stack(x, dim=-1).reshape(n_thread, self.n_agent, self.attention_dim)  # (batch_size, n_agents, self.attention_dim)
-        obs_embed = torch.cat([h_out, x], dim=-1)
-        # output = self.decoding(obs_embed)
+            x = torch.stack(x, dim=-1).reshape(n_thread, self.n_agent, self.attention_dim)  # (batch_size, n_agents, self.attention_dim)
+            obs_embed = torch.cat([h_out, x], dim=-1)  # h_out直接shortcut到最后
 
-        return obs_embed
+            return obs_embed
+
+        else:
+            return hard_weights
 
 
-class G2ANetAgent(DPPOAgent):
+
+class G2ANetHardSoftAgent(DPPOAgent):
     def __init__(self, logger, device, agent_args, input_args):
         DPPOAgent.__init__(self, logger, device, agent_args, input_args)
 
@@ -139,21 +141,49 @@ class G2ANetAgent(DPPOAgent):
                              attention_dim=self.attention_dim
                              ).to(device)
 
-        # 先用一个全连接层，DPPO里的actor和vs层数更多
 
         pi_dict, v_dict = self.pi_args._toDict(), self.v_args._toDict()
-        pi_dict['sizes'][0] = self.rnn_hidden_dim + self.attention_dim  # 魔改维度！
-        v_dict['sizes'][0] = self.rnn_hidden_dim + self.attention_dim  # 魔改维度！
+        pi_dict['sizes'][0] = self.rnn_hidden_dim + self.attention_dim  # 修改维度
+        v_dict['sizes'][0] = self.rnn_hidden_dim + self.attention_dim  # 修改维度
         self.actors = nn.ModuleList()
         self.vs = nn.ModuleList()
         for i in range(self.n_agent):
             self.actors.append(CategoricalActor(**pi_dict).to(self.device))
             self.vs.append(MLP(**v_dict).to(self.device))
-
         self.optimizer_pi = Adam(self.actors.parameters(), lr=self.lr)
         self.optimizer_v = Adam(self.vs.parameters(), lr=self.lr_v)
 
         print(1)
+
+
+class G2ANetAgent(DPPOAgent):
+    def __init__(self, logger, device, agent_args, input_args):
+        DPPOAgent.__init__(self, logger, device, agent_args, input_args)
+
+        self.rnn_hidden_dim = 64
+        self.attention_dim = 32
+
+        self.g2a_embed_hard_net = G2AEmbedNet(obs_dim=agent_args.observation_dim,
+                                         n_agent=agent_args.n_agent,
+                                         device=device,
+                                         rnn_hidden_dim=self.rnn_hidden_dim,
+                                         attention_dim=self.attention_dim,
+                                         soft=False  # crucial!
+                                         ).to(device)
+
+        pi_dict, v_dict = self.pi_args._toDict(), self.v_args._toDict()
+        pi_dict['sizes'][0] = self.observation_dim  # share邻居的obs时做并集而不是concat
+        v_dict['sizes'][0] = self.observation_dim
+        self.actors = nn.ModuleList()
+        self.vs = nn.ModuleList()
+        for i in range(self.n_agent):
+            self.actors.append(CategoricalActor(**pi_dict).to(self.device))
+            self.vs.append(MLP(**v_dict).to(self.device))
+        self.optimizer_pi = Adam(self.actors.parameters(), lr=self.lr)
+        self.optimizer_v = Adam(self.vs.parameters(), lr=self.lr_v)
+
+
+
 
 
 
