@@ -409,6 +409,10 @@ class EnvMobile():
         distance = self._cal_distance(uav_position, poi_position)
         theta = self._cal_theta(uav_position, poi_position)
         path_loss = 54.05 + 10 * eta * math.log10(distance) + (-19.9) / (1 + alpha * math.exp(-beta * (theta - alpha)))
+        
+        # fc= 24
+        # path_loss2 = (1 + alpha * math.exp(-beta * (theta - alpha)))*(28.0+22*math.log10(distance)+20*math.log10(fc))+(1-(1 + alpha * math.exp(-beta * (theta - alpha))))*(-17.5+(46-7*math.log10(100))*math.log10(distance)+20*math.log10(4*math.pi*fc/3))
+        # print(path_loss,path_loss2)
         w_tx = 20
         w_noise = -104
         w_s_t = w_tx - path_loss - w_noise
