@@ -170,6 +170,74 @@ def traj_to_timestamped_geojson(index, trajectory, rm, uav_num, color,
     return features
 
 
+
+def uav_traj_to_timestamped_geojson(index, trajectory, rm, uav_num, color,
+                                input_args, env_config, poi_QoS=None, draw_snrth=False):
+
+    point_gdf = trajectory.df.copy()
+    features = []
+    # for Point in GeoJSON type
+    last_vis_coord = rm.lower_left
+    last_x,last_y,last_time = None,None,None
+    for i, (current_time, row) in enumerate(point_gdf.iterrows()):  # 遍历一个人的不同时间步
+        
+        if last_x is None:
+            last_x = row["geometry"].xy[0][0]
+            last_y = row["geometry"].xy[1][0]
+            last_time = current_time.isoformat()
+        new_x = row["geometry"].xy[0][0]
+        new_y = row["geometry"].xy[1][0]
+        
+        if index < uav_num:  # UAV
+            radius, opacity = 5, 1
+        else:  # human
+            radius, opacity = 2, 1
+
+        # for Point in GeoJSON type
+        cur_coord = [[last_x, last_y],[new_x, new_y]]
+        
+   
+        
+        feature1 = {
+                "type": "Feature",
+                "geometry": {
+                    "type": "LineString",
+                    "coordinates": cur_coord,
+                },
+                "properties": {
+                    "times": [last_time,current_time.isoformat()],
+                    "icon": 'circle',  # point
+                    "iconstyle": {
+                        'fillColor': color,
+                        'fillOpacity': opacity,
+                        'stroke': 'true',
+                        'radius': radius,
+                        'weight': 1,
+                    },
+                    "style": {  # 外边框的属性
+                        "color": color,
+                        "opacity": opacity
+                    },
+                    "code": 11,
+                },
+            }
+        features.append(feature1)
+        
+        last_x = new_x
+        last_y = new_y 
+        last_time = current_time.isoformat()
+
+        # 每个时间步都画SNRth的话图上太乱了，隔五步画一次
+        # 人没怎么动还一直画太黑了，仅当人移动超过一定距离再画新的
+        def is_draw(cur_coord, last_vis_coord):
+            pos1 = rm.lonlat2pygamexy(*cur_coord)
+            pos2 = rm.lonlat2pygamexy(*last_vis_coord)
+            dis = np.linalg.norm(np.array(pos1)-np.array(pos2), ord=2)
+            return dis > 500
+     
+    return features
+
+
 # 注意，这种画法圆的大小是和**地图**适配的
 def folium_draw_circle(map, pos, color, radius, weight):  #
     folium.vector_layers.Circle(

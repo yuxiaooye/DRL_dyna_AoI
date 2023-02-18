@@ -196,6 +196,8 @@ class EnvMobile():
         # uav收集
         ## 确定uav的服务对象，元素是（poi_id，data rate）二元组
         access_lists = self._uavs_access_users(action2)
+        for uav_index in range(self.UAV_NUM):
+            self._use_energy(uav_index,len(access_lists[uav_index])*10) # 服务每个用户带来10J消耗
 
         ## 计算各poi的总data rate
         sum_rates = np.zeros(self.POI_NUM)
@@ -505,7 +507,8 @@ class EnvMobile():
         for i in range(self.cell_num):
             for j in range(self.cell_num):
                 center = ((i+1/2)*self.cell_span_x, (j+1/2)*self.cell_span_y)
-                if self._cal_distance(center, self.uav_position[uav_id]) < self.agent_field:
+                #if self._cal_distance(center, self.uav_position[uav_id]) < self.agent_field:
+                if 1>0:
                     visible[i][j] = 1
                 else:
                     visible[i][j] = 0

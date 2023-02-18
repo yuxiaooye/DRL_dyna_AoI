@@ -115,29 +115,44 @@ def render_HTML(output_dir, tag='train', draw_snrth=False, traj_filename='eps_be
 
     for index, traj in enumerate(trajs.trajectories):
         name, color = get_name_color_by_index(index)
-        features = traj_to_timestamped_geojson(index, traj, rm, uav_num, color,
-                                               input_args, env_config, draw_snrth=False)  # True
-
-        TimestampedGeoJson(  # 这里解注释了一个try except
-            {
-                "type": "FeatureCollection",
-                "features": features,
-            },
-            period="PT15S",
-            add_last_point=True,
-            transition_time=200,  # The duration in ms of a transition from between timestamps.
-            max_speed=0.2,
-            loop=True,
-        ).add_to(map)
+        if index<uav_num:
+            uav_features = uav_traj_to_timestamped_geojson(index, traj, rm, uav_num, color,
+                                                input_args, env_config, draw_snrth=False) 
+            TimestampedGeoJson(  # 这里解注释了一个try except
+                {
+                    "type": "FeatureCollection",
+                    "features": uav_features,
+                },
+                period="PT15S",
+                add_last_point=True,
+                transition_time=200,  # The duration in ms of a transition from between timestamps.
+                max_speed=0.2,
+                loop=True,
+            ).add_to(map)
+        else:
+            features = traj_to_timestamped_geojson(index, traj, rm, uav_num, color,
+                                                input_args, env_config, draw_snrth=False)  # True
+            TimestampedGeoJson(  # 这里解注释了一个try except
+                {
+                    "type": "FeatureCollection",
+                    "features": features,
+                },
+                period="PT15S",
+                add_last_point=True,
+                transition_time=200,  # The duration in ms of a transition from between timestamps.
+                max_speed=0.2,
+                loop=True,
+            ).add_to(map)
 
         # line for uav
-        if index < uav_num:
-            geo_col = traj.to_point_gdf().geometry
-            for s in range(geo_col.shape[0] - 2):
-                xy = [[y, x] for x, y in zip(geo_col.x[s:s + 2], geo_col.y[s:s + 2])]
-                f1 = folium.FeatureGroup(name)
-                folium.PolyLine(locations=xy, color=color, weight=4, opacity=0.7).add_to(f1)  # opacity=1 might more beautiful
-                f1.add_to(map)
+
+        # if index < uav_num:
+        #     geo_col = traj.to_point_gdf().geometry
+        #     for s in range(geo_col.shape[0] - 2):
+        #         xy = [[y, x] for x, y in zip(geo_col.x[s:s + 2], geo_col.y[s:s + 2])]
+        #         f1 = folium.FeatureGroup(name)
+        #         folium.PolyLine(locations=xy, color=color, weight=4, opacity=0.7).add_to(f1)  # opacity=1 might more beautiful
+        #         f1.add_to(map)
 
     folium.LayerControl().add_to(map)
 

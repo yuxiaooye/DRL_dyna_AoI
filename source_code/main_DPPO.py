@@ -135,6 +135,8 @@ def override(alg_args, run_args, input_args, env):
         run_args.name += f'_MLPModel'
     if input_args.multi_mlp:
         run_args.name += f'_MultiMLP'
+        
+    run_args.name += '_'+input_args.tag
     final = '../{}/{}'.format(input_args.output_dir, run_args.name)
     run_args.output_dir = final
     input_args.output_dir = final
@@ -156,6 +158,7 @@ def parse_args():
     parser.add_argument('--algo', type=str, required=False, default='IPPO', help="algorithm(DMPO/IC3Net/CPPO/DPPO/IA2C/IPPO) ")
     parser.add_argument('--device', type=str, required=False, default='cuda:0', help="device(cpu/cuda:0/cuda:1/...) ")
     parser.add_argument("--dataset", type=str, default='NCSU', choices=['NCSU', 'KAIST'])
+    parser.add_argument("--tag", type=str, default='', help='每个单独实验的备注')
     # dirs
     parser.add_argument("--output_dir", type=str, default='runs/debug', help="which fold to save under 'runs/'")
     parser.add_argument('--group', type=str, default='debug', help='填写我对一组实验的备注，作用与wandb的group和tb的实验保存路径')
