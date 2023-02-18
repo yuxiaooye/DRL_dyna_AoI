@@ -94,7 +94,8 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
                 # 添加对自己的hard-att一定是1的维度
                 hard_att = torch.cat([hard_att[:, :i], torch.ones(n_thread, 1).to(self.device), hard_att[:, i:]], dim=-1)
                 shared_s = s * hard_att.unsqueeze(-1)  # mask后仅邻居的状态可见
-                shared_s = torch.max(shared_s, dim=1)[0]  # 取并集
+                shared_s = torch.sum(shared_s, dim=1)
+                shared_s = torch.where(s[:,i] > 0, s[:, i], shared_s)  # 取并集
                 ans_s.append(shared_s)
             return ans_s
 

@@ -136,6 +136,8 @@ def override(alg_args, run_args, input_args, env):
         run_args.name += f'_UseStackFrame'
     if input_args.g2a_hidden_dim != 64:
         run_args.name += f'_G2AHiddenDim={input_args.g2a_hidden_dim}'
+    if input_args.tau != 0.01:
+        run_args.name += f'_TAU={input_args.tau}'
     # if not input_args.use_extended_value:
     #     run_args.name += f'_NotUseExtendedValue'
     # if input_args.use_mlp_model:
@@ -183,6 +185,7 @@ def parse_args():
     # parser.add_argument('--use-mlp-model', action='store_true', help='将model改为最简单的mlp，仅用于DMPO')
     # parser.add_argument('--multi-mlp', action='store_true', help='在model中分开预测obs中不同类别的信息，仅用于DMPO')
     parser.add_argument('--g2a_hidden_dim', type=int, default=64, help='在model中分开预测obs中不同类别的信息，仅用于DMPO')
+    parser.add_argument('--tau', type=float, default=0.01)
     # tune env
     ## setting
     parser.add_argument('--fixed-range', action='store_false')  # 重要，sensing range现在固定了
