@@ -169,7 +169,7 @@ def parse_args():
     parser.add_argument('--mute_wandb', default=False, action='store_true')
     # tune agent
     parser.add_argument('--init_checkpoint', type=str)  # load pretrained model
-    parser.add_argument('--n_thread', type=int, default=8)
+    parser.add_argument('--n_thread', type=int, default=16)
     # tune algo
     parser.add_argument('--lr', type=float)
     parser.add_argument('--lr_v', type=float)
