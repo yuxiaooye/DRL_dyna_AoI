@@ -322,31 +322,36 @@ class CategoricalActor(nn.Module):
         self.snrmap_features = net_args.get('snrmap_features', 0)
 
         if self.snrmap_features > 0:
-            net_args['sizes'][0] -= self.snrmap_features
-            net_args['sizes'][-1] = 32
-            snr_net_args = copy.deepcopy(net_args)
-            snr_net_args['sizes'] = [32 + self.snrmap_features, 32, 9]
-            # TODO 如果要引入新网络，snr_network其实没必要那么多层；更好的方式是直接concat到embedding_before_branch
-            self.snr_network = net_fn(**snr_net_args)
+            # net_args['sizes'][0] -= self.snrmap_features
+            # net_args['sizes'][-1] = 32
+            # snr_net_args = copy.deepcopy(net_args)
+            # snr_net_args['sizes'] = [32 + self.snrmap_features, 32, 9]
+
+            #self.snr_network = net_fn(**snr_net_args)
+            pass
 
         self.network = net_fn(**net_args)
-        self.branch1 = nn.Linear(net_args['sizes'][-1], net_args['branchs'][0])
-        self.branch2 = nn.Linear(net_args['sizes'][-1], net_args['branchs'][1])
+        self.branch1 = nn.Linear(net_args['sizes'][-1] + self.snrmap_features, net_args['branchs'][0])
+        self.branch2 = nn.Linear(net_args['sizes'][-1] + self.snrmap_features, net_args['branchs'][1])
         self.eps = 1e-5
         # if pi becomes truely deterministic (e.g. SAC alpha = 0)
         # q will become NaN, use eps to increase stability 
         # and make SAC compatible with "Hard"ActorCritic
 
     def forward(self, obs):  # 多维度动作确认OK
-        # obs [B,S]
-        if self.snrmap_features > 0:
-            x = self.network(obs[:, 0:-self.snrmap_features])
-            snrmap = obs[:, -self.snrmap_features:]
-            embed = self.snr_network(torch.cat([x, snrmap], dim=-1))
-        else:
-            assert self.snrmap_features == 0
-            embed = self.network(obs)
+        # obs [B,S]  #
+        # if self.snrmap_features > 0:
+        #     # x = self.network(obs[:, 0:-self.snrmap_features])
+        #     # snrmap = obs[:, -self.snrmap_features:]
+        #     # embed = self.snr_network(torch.cat([x, snrmap], dim=-1))
+        # else:
+        #     assert self.snrmap_features == 0
+        #     embed = self.network(obs)
 
+        embed = self.network(obs)
+        if self.snrmap_features > 0:
+            snrmap = obs[:, -self.snrmap_features:]
+            embed = torch.cat([embed, snrmap], dim=-1)  # 直接shortcut，concat到送入两个branch之前的embedding上
         logit1, logit2 = self.branch1(embed), self.branch2(embed)
         logits = torch.stack([logit1, logit2], dim=1)
         probs = self.softmax(logits) + self.eps

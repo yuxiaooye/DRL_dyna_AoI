@@ -30,11 +30,8 @@ def getArgs(radius_v, radius_pi, env, input_args=None):
 
     agent_args = Config()
 
-    # 下面这个值后续会被读，但env_ucs环境没有neighbor_mask属性，
-    # 所以仿照catchup，在这里临时硬编码一个neighbor_mask
-    from envs.neighbor_graph import get_adj
-
     agent_args.n_agent = env.UAV_NUM
+    from envs.neighbor_graph import get_adj
     agent_args.adj = get_adj(env.UAV_NUM)
     agent_args.gamma = 0.99
     agent_args.lamda = 0.5

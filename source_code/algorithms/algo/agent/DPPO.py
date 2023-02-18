@@ -67,7 +67,7 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
         if input_args.use_stack_frame:
             self.observation_dim *= 4
         self.action_space = agent_args.action_space
-        self.action_dim = sum([dim.n for dim in self.action_space])  # TODO 这个感觉不能这么写。。
+        # self.action_dim = sum([dim.n for dim in self.action_space])
 
         self.adj = torch.as_tensor(agent_args.adj, device=self.device, dtype=torch.float) \
             if self.use_extended_value else None
