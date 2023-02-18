@@ -152,6 +152,7 @@ def render_HTML(output_dir, tag='train', draw_snrth=False, traj_filename='eps_be
                     "features": features,
                 },
                 period="PT15S",
+                duration="PT15S",
                 add_last_point=True,
                 transition_time=200,  # The duration in ms of a transition from between timestamps.
                 max_speed=0.2,
