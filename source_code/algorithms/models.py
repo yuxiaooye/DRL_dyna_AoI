@@ -353,10 +353,13 @@ class CategoricalActor(nn.Module):
             snrmap = obs[:, -self.snrmap_features:]
             embed = torch.cat([embed, snrmap], dim=-1)  # 直接shortcut，concat到送入两个branch之前的embedding上
         logit1, logit2 = self.branch1(embed), self.branch2(embed)
-        logits = torch.stack([logit1, logit2], dim=1)
-        probs = self.softmax(logits) + self.eps
-        probs = probs / probs.sum(dim=-1, keepdim=True)
-        return probs  # shape = (-1, 2, 9) 其中2是动作维度数
+        #logits = torch.stack([logit1, logit2], dim=1)
+        prob1 = self.softmax(logit1) + self.eps
+        prob1 = prob1 / prob1.sum(dim=-1, keepdim=True)
+        
+        prob2 = self.softmax(logit2) + self.eps
+        prob2 = prob2 / prob2.sum(dim=-1, keepdim=True)
+        return torch.cat([prob1,prob2],dim=-1)  # shape = (-1, act_dim1+act_dim2) 
 
 
 

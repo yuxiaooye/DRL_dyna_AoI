@@ -193,7 +193,7 @@ def parse_args():
     parser.add_argument('--dyna_level', type=str, default='2', help='指明读取不同难度的poi_QoS.npy')
     parser.add_argument('--init_energy', type=float, default=719280)
     parser.add_argument('--user_data_amount', type=int, default=1)
-    parser.add_argument('--update_num', type=int, default=10)
+    parser.add_argument('--update_num', type=int, default=15)
     parser.add_argument('--uav_num', type=int, default=3)
     parser.add_argument('--fixed-col-time', action='store_false')
     parser.add_argument('--aoith', default=60, type=int)

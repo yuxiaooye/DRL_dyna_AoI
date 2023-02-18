@@ -136,7 +136,10 @@ class OnPolicyRunner:
             envs.reset()
             while not (done or (ep_len == length)):  # 测试时限定一个episode最大为length步
                 s = envs.get_obs_from_outside()
-                a = self.agent.act(s).sample()  # shape = (-1, 3)
+                a = self.agent.act(s) # shape = (-1, 3)
+                action1 = a['branch1'].sample()
+                action2 = a['branch2'].sample()
+                a = torch.stack([action1,action2],dim=-1)
                 # if len(a.shape) == 2 and a.shape[0] == 1:  # for IA2C and IC3Net 注意：向量环境下这个需要改！
                 #     a = a.squeeze(0)
                 a = a.detach().cpu().numpy()  # # shape should be (UAV_NUM, )
@@ -177,8 +180,15 @@ class OnPolicyRunner:
         for t in range(int(self.rollout_length/self.input_args.n_thread)):  # 加入向量环境后，控制总训练步数不变
             s = envs.get_obs_from_outside()
             dist = self.agent.act(s)
-            a = dist.sample()
-            logp = dist.log_prob(a)
+            a = []
+            logp = []
+            for key in ['branch1','branch2']:
+                a_tmp = dist[key].sample()
+                logp_tmp = dist[key].log_prob(a_tmp)
+                a.append(a_tmp)
+                logp.append(logp_tmp)
+            a = torch.stack(a,dim=-1)
+            logp=torch.stack(logp,dim=-1)
             # if len(a.shape) == 2 and a.shape[0] == 1:  # for IA2C and IC3Net  # 注意：向量环境下要改~ a.shape[0]已经不是IA2C和IC3Net会额外添加的batch的维度了，我猜需要维度从0改成1
             #     a = a.squeeze(0)
             #     logp = logp.squeeze(0)
@@ -246,8 +256,15 @@ class OnPolicyRunner:
         trajBuffer = TrajectoryBuffer(device=self.device)
         for _ in range(self.model_traj_length):  # 与环境做交互
             dist = self.agent.act(s)
-            a = dist.sample()
-            logp = dist.log_prob(a)
+            a = []
+            logp = []
+            for key in ['branch1','branch2']:
+                a_tmp = dist[key].sample()
+                logp_tmp = dist[key].log_prob(a_tmp)
+                a.append(a_tmp)
+                logp.append(logp_tmp)
+            a = torch.stack(a,dim=-1)
+            logp=torch.stack(logp,dim=-1)
             r, s1, done, _ = self.agent.model_step(s, a)
             trajBuffer.store(s, a, r, s1, done, logp)
             s = s1
