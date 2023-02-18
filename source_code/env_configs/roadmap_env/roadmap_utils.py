@@ -42,9 +42,7 @@ class Roadmap():
 
     def init_pois(self, max_episode_step=120):
         '''读df并处理表头'''
-        # TODO DASAP
-        # poi_df = pd.read_csv(osp.join(project_dir, f'envs/{self.dataset}/human{max_episode_step}.csv'))
-        poi_df = pd.read_csv('F:\PycharmProjects\jsac\DRL_dyna_AoI\kaist_final.csv')
+        poi_df = pd.read_csv(osp.join(project_dir, f'envs/{self.dataset}/human{max_episode_step}.csv'))
         assert poi_df.columns.to_list()[-2:] == ['px', 'py']
         '''将df转换为np.array'''
         poi_mat = np.expand_dims(poi_df[poi_df['id'] == 0].values[:, -2:], axis=0)  # idt
