@@ -42,12 +42,19 @@ class Roadmap():
 
     def init_pois(self, max_episode_step=120):
         '''读df并处理表头'''
-        poi_df = pd.read_csv(osp.join(project_dir, f'envs/{self.dataset}/human{max_episode_step}.csv'))
+        poi_num = self.env_config['poi_num'] if self.env_config is not None else self.poi_num
+        if self.dataset == 'NCSU' and poi_num == 33 or self.dataset == 'KAIST' and poi_num == 92:
+            postfix = ''
+        else:
+            postfix = f'-user{poi_num}'
+        csv_name = f'envs/{self.dataset}/human{max_episode_step}{postfix}.csv'
+        poi_df = pd.read_csv(osp.join(project_dir, csv_name))
+
         assert poi_df.columns.to_list()[-2:] == ['px', 'py']
         '''将df转换为np.array'''
         poi_mat = np.expand_dims(poi_df[poi_df['id'] == 0].values[:, -2:], axis=0)  # idt
 
-        poi_num = self.env_config['poi_num'] if self.env_config is not None else self.poi_num
+
         for id in range(1, poi_num):
             subDf = poi_df[poi_df['id'] == id]
             poi_mat = np.concatenate((poi_mat, np.expand_dims(subDf.values[:, -2:], axis=0)), axis=0)

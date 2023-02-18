@@ -114,6 +114,8 @@ def override(alg_args, run_args, input_args, env):
         run_args.name += f'_TXth={input_args.txth}'
     if input_args.uav_height != 100:
         run_args.name += f'_UAVHeight={input_args.uav_height}'
+    if input_args.poi_num is not None:
+        run_args.name += f'_Users={input_args.poi_num}'
 
     ## MDP
     if input_args.max_episode_step != 120:
@@ -161,6 +163,7 @@ def parse_args():
     parser.add_argument('--algo', type=str, required=False, default='IPPO', help="algorithm(DMPO/IC3Net/CPPO/DPPO/IA2C/IPPO) ")
     parser.add_argument('--device', type=str, required=False, default='cuda:0', help="device(cpu/cuda:0/cuda:1/...) ")
     parser.add_argument("--dataset", type=str, default='NCSU', choices=['NCSU', 'KAIST', 'purdue'])
+    parser.add_argument("--poi_num", type=int, default=None)
     parser.add_argument("--tag", type=str, default='', help='每个单独实验的备注')
     # dirs
     parser.add_argument("--output_dir", type=str, default='runs/debug', help="which fold to save under 'runs/'")
@@ -246,7 +249,7 @@ else:
     raise NotImplementedError
 
 env_args = {  # 这里环境类的参数抄昊宝
-    "emergency_threshold": 100,
+    "emergency_threshold": 100, 
     "max_episode_step": input_args.max_episode_step,
     "collect_range": input_args.snr,
     "initial_energy": input_args.init_energy,
@@ -257,6 +260,8 @@ env_args = {  # 这里环境类的参数抄昊宝
     "RATE_THRESHOLD": input_args.txth,
     "uav_height": input_args.uav_height,
 }
+if input_args.poi_num is not None:
+    env_args["poi_num"] = input_args.poi_num
 
 run_args = getRunArgs(input_args)
 print('debug =', run_args.debug)
