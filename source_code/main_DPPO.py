@@ -116,8 +116,8 @@ def override(alg_args, run_args, input_args, env):
         run_args.name += f'_UAVHeight={input_args.uav_height}'
     if input_args.poi_num is not None:
         run_args.name += f'_Users={input_args.poi_num}'
-    if input_args.hao02191630:
-        run_args.name += f'_hao02191630'
+    if not input_args.hao02191630:
+        run_args.name += f'_Nothao02191630'
     ## MDP
     if input_args.max_episode_step != 120:
         run_args.name += f'_MaxTs={input_args.max_episode_step}'

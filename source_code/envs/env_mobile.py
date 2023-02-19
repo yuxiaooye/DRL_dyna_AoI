@@ -173,6 +173,7 @@ class EnvMobile():
                 access_list = list(map(lambda x: (x[0], x[1] / max_access_num[uav_id], x[2]), access_list))  # 惩罚在周围人少的时候选择服务很多的人
             else:
                 access_list = list(map(lambda x: (x[0], x[1] / len(access_list), x[2]), access_list))
+            print(f'选择接入{max_access_num[uav_id]}人，sensing range内有{len(sorted_triple_in_range)}人')  # TODO DASAP
             access_lists.append(access_list)
         return access_lists
 
@@ -230,8 +231,8 @@ class EnvMobile():
                         # 收集aoi越大的user，奖励越大；rate/sum_rate相当于credit assignment
                         r = (before_reset / self.MAX_EPISODE_STEP) * (rate / sum_rate)
                         uav_rewards[uav_id] += r
-                        self.aoi_reward_list.append(r)
                         rate_contribute_to_that_poi[uav_id] = rate
+            self.aoi_reward_list.extend(uav_rewards)  # fix bug
 
         visit_num = sum(sum_rates > 0)
         if visit_num != 0:
