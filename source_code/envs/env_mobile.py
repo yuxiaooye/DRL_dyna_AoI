@@ -184,6 +184,12 @@ class EnvMobile():
         # 若max_episode_step=120, 则执行120次step方法。episode结束时保存120个poi和uav的位置点，而不是icde的121个，把poi、uav的初始位置扔掉！
         self.step_count += 1
 
+        # 在当前时间步的收集前统计soft emergency的user数量
+        soft_emergency_list = []
+        for i in range(self.POI_NUM):
+            if self.poi_aoi[i] > 0.8 * self.AoI_THRESHOLD:  # 0.8是soft超参
+                soft_emergency_list.append(i)
+
         # poi移动
         self._human_move()
 
@@ -263,23 +269,20 @@ class EnvMobile():
         now_aoi = 0  # 当前时间步所有poi的aoi值总和
         em_now = 0
         aoi_list = []  # 当前时间步各poi的aoi值
-        emergency_list = []
         for i in range(self.POI_NUM):
             aoi = self.poi_aoi[i]
-            # print('aoi=', aoi)
             if aoi > self.AoI_THRESHOLD:  # 超过了AoI阈值
                 em_now += 1
-                emergency_list.append(i)
             now_aoi += aoi
             aoi_list.append(aoi)
 
-        if emergency_list == []:
+        if soft_emergency_list == []:
             self.soft_tx_satis_ratio_list.append(1)
         else:
-            emer_satis_num = len(list(
-                filter(lambda x: x[0] in emergency_list and x[1] > self.RATE_THRESHOLD, enumerate(sum_rates))
+            emer_satis_num = len(list(  # 有个问题，现在emergency_list统计时没加soft
+                filter(lambda x: x[0] in soft_emergency_list and x[1] > self.RATE_THRESHOLD, enumerate(sum_rates))
             ))
-            self.soft_tx_satis_ratio_list.append(emer_satis_num/len(emergency_list))
+            self.soft_tx_satis_ratio_list.append(emer_satis_num/len(soft_emergency_list))
 
         self.poi_history.append({
             'pos': copy.deepcopy(self.poi_position),
