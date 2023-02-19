@@ -1,7 +1,15 @@
 # !/bin/sh
 source activate yyx_ishen
-group='0218-NCSU50user-tuneG2A'
-for g2a_hidden_dim in 32 64 96 128;
+group='0219-tune-mapsize'
+for dataset in 'NCSU' 'KAIST';
 do
-nohup python -u main_DPPO.py --group ${group} --poi_num 50 --algo G2ANet --g2a_hidden_dim ${g2a_hidden_dim}  --user yyx --device cuda:1 &
+for map_size in 4 6 8 10;
+do
+if [ $dataset == 'NCSU' ]
+then
+nohup python -u main_DPPO.py --group ${group} --poi_num 50 --use_snrmap --map_size ${map_size} --user yyx --device cuda:0 &
+else
+nohup python -u main_DPPO.py --group ${group} --dataset ${dataset} --poi_num 122 --use_snrmap --map_size ${map_size} --user yyx --device cuda:1 &
+fi
+done
 done

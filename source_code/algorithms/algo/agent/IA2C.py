@@ -171,15 +171,13 @@ class IA2C(nn.ModuleList, YyxAgentBase):
         return value, returns, advantages, reduced_advantages
 
     def load(self):
-        # set  run_args.init_checkpoint  = None
+        # set  run_args.checkpoint  = None
         pass
 
     def checkConverged(self, ls_info):
         # not neccessary
         return False
 
-    def save(self, info=None):
-        self.logger.save(self, info=info)
 
         
     def _evalV(self, s):

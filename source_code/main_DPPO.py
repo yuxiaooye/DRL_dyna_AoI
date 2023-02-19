@@ -25,7 +25,7 @@ def getRunArgs(input_args):
     '''yyx add start'''
     run_args.debug = input_args.debug
     run_args.test = input_args.test
-    run_args.init_checkpoint = input_args.init_checkpoint
+    run_args.checkpoint = input_args.checkpoint
     run_args.group = input_args.group
     run_args.mute_wandb = input_args.mute_wandb
     '''yyx add end'''
@@ -138,6 +138,8 @@ def override(alg_args, run_args, input_args, env):
         run_args.name += f'_G2AHiddenDim={input_args.g2a_hidden_dim}'
     if input_args.tau != 0.01:
         run_args.name += f'_TAU={input_args.tau}'
+    if input_args.map_size != 6:
+        run_args.name += f'_MapSize={input_args.map_size}'
     # if not input_args.use_extended_value:
     #     run_args.name += f'_NotUseExtendedValue'
     # if input_args.use_mlp_model:
@@ -146,9 +148,12 @@ def override(alg_args, run_args, input_args, env):
     #     run_args.name += f'_MultiMLP'
 
     run_args.name += '_'+input_args.tag
-    final = '../{}/{}'.format(input_args.output_dir, run_args.name)
-    run_args.output_dir = final
-    input_args.output_dir = final
+    if not input_args.test:
+        final = '../{}/{}'.format(input_args.output_dir, run_args.name)
+        run_args.output_dir = final
+        input_args.output_dir = final
+    else:
+        run_args.output_dir = input_args.output_dir
 
     alg_args.algo = input_args.algo
     alg_args.use_stack_frame = input_args.use_stack_frame
@@ -175,7 +180,7 @@ def parse_args():
     # system stub
     parser.add_argument('--mute_wandb', default=False, action='store_true')
     # tune agent
-    parser.add_argument('--init_checkpoint', type=str)  # load pretrained model
+    parser.add_argument('--checkpoint', type=str)  # load pretrained model
     parser.add_argument('--n_thread', type=int, default=16)
     # tune algo
     parser.add_argument('--lr', type=float)
@@ -186,6 +191,8 @@ def parse_args():
     # parser.add_argument('--multi-mlp', action='store_true', help='在model中分开预测obs中不同类别的信息，仅用于DMPO')
     parser.add_argument('--g2a_hidden_dim', type=int, default=64, help='在model中分开预测obs中不同类别的信息，仅用于DMPO')
     parser.add_argument('--tau', type=float, default=0.01)
+    parser.add_argument('--map_size', type=int, default=6)
+
     # tune env
     ## setting
     parser.add_argument('--fixed-range', action='store_false')  # 重要，sensing range现在固定了
@@ -210,8 +217,13 @@ def parse_args():
     #     assert args.use_mlp_model
 
     if args.debug:
-        assert args.group == 'debug'
+        args.group = 'debug'
     args.output_dir = f'runs/{args.group}'
+
+    if args.test:
+        args.group = 'test'
+        args.n_thread = 1
+        args.output_dir = f'{args.checkpoint}/test'
 
     return args
 
@@ -271,13 +283,16 @@ if input_args.poi_num is not None:
 
 run_args = getRunArgs(input_args)
 print('debug =', run_args.debug)
+print('test =', run_args.test)
 
 dummy_env = env_fn_train(env_args, input_args, phase='dummy')
 alg_args = getAlgArgs(run_args, input_args, dummy_env)
 alg_args, run_args, input_args = override(alg_args, run_args, input_args, dummy_env)
-record_input_args(input_args, env_args, run_args.output_dir)
+if not input_args.test:
+    record_input_args(input_args, env_args, run_args.output_dir)
 
 from env_configs.wrappers.env_wrappers import SubprocVecEnv
+
 
 envs_train = SubprocVecEnv([env_fn_train(env_args, input_args, phase='train') for _ in range(input_args.n_thread)])
 envs_test = SubprocVecEnv([env_fn_test(env_args, input_args, phase='test') for _ in range(1)])

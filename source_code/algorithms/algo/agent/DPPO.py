@@ -262,15 +262,6 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
     def checkConverged(self, ls_info):
         return False
 
-    def save(self, info=None):
-        self.logger.save(self, info=info)
-
-    def load(self, state_dict):
-        self.load_state_dict(state_dict[self.logger.prefix])
-
-    def load_nets(self, dir_name, episode):
-        # yyx: can also add argument is_newbest, like save_nets()
-        self.actors.load_state_dict(torch.load(dir_name + '/Models/' + str(episode) + 'best_actor.pt'))
 
 
     def _init_actors(self):

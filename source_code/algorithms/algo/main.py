@@ -1,4 +1,6 @@
 import os
+import os.path as osp
+from datetime import datetime
 from numpy.core.numeric import indices
 from torch.distributions.normal import Normal
 from algorithms.utils import collect, mem_report
@@ -22,6 +24,21 @@ import argparse
 from algorithms.algo.buffer import MultiCollect, Trajectory, TrajectoryBuffer, ModelBuffer
 
 
+def write_output(info, output_dir, tag='train'):
+    logging_path = osp.join(output_dir, f'{tag}_output.txt')
+    with open(logging_path, 'a') as f:
+        f.write('[' + datetime.strftime(datetime.now(), '%Y-%m-%d %H:%M:%S') + ']\n')
+        f.write(f""
+                # f"best_{tag}_reward: {'%.3f' % self.best_eval_reward if tag == 'eval' else '%.3f' % self.best_train_reward} "
+                f"QoI: {'%.3f' % info['QoI']} "
+                f"episodic_aoi: {'%.3f' % info['episodic_aoi']} "
+                f"aoi_satis_ratio: {'%.3f' % info['aoi_satis_ratio']} "
+                f"tx_satis_ratio: {'%.3f' % info['tx_satis_ratio']} "
+                f"energy_consuming: {'%.3f' % info['energy_consuming']} "
+                # + '\n'
+                )
+
+
 class OnPolicyRunner:
     def __init__(self, logger, agent, envs_learn, envs_test, dummy_env,
                  run_args, alg_args, input_args, **kwargs):
@@ -35,9 +52,8 @@ class OnPolicyRunner:
         self.num_agent = agent.n_agent
         self.device = self.agent.device if hasattr(self.agent, "device") else "cpu"
 
-        if run_args.init_checkpoint is not None:  # not train from scratch
-            # agent.load(run_args.init_checkpoint)
-            self.agent.actors.load_state_dict(torch.load(run_args.init_checkpoint))
+        if run_args.checkpoint is not None:  # not train from scratch
+            self.agent.load_nets(run_args.checkpoint)
             logger.log(interaction=run_args.start_step)
         self.start_step = run_args.start_step
         self.env_name = input_args.env
@@ -94,16 +110,14 @@ class OnPolicyRunner:
             self.updateModel(self.n_model_update_warmup)
 
         if self.run_args.test:
-            ret = self.test()
-            print('test episode reward: ', ret)
+            self.test()
             return
 
         for iter in trange(self.n_iter, desc='rollout env'):
             if iter % 50 == 0:
-                mean_return = self.test()
-                self.agent.save(info=mean_return)  # yyx的保存模型
+                self.test()
             if iter % 1000 == 0:
-                self.agent.save_nets(dir_name=self.run_args.output_dir, episode=iter)
+                self.agent.save_nets(dir_name=self.run_args.output_dir, iter=iter)
 
             trajs = self.rollout_env()  # model-based三部曲之一
             if self.model_based:
@@ -136,40 +150,35 @@ class OnPolicyRunner:
             envs.reset()
             while not (done or (ep_len == length)):  # 测试时限定一个episode最大为length步
                 s = envs.get_obs_from_outside()
-                a = self.agent.act(s) # shape = (-1, 3)
+                a = self.agent.act(s)  # shape = (-1, 3)
                 action1 = a['branch1'].sample()
                 action2 = a['branch2'].sample()
-                a = torch.stack([action1,action2],dim=-1)
+                a = torch.stack([action1, action2], dim=-1)
                 # if len(a.shape) == 2 and a.shape[0] == 1:  # for IA2C and IC3Net 注意：向量环境下这个需要改！
                 #     a = a.squeeze(0)
                 a = a.detach().cpu().numpy()  # # shape should be (UAV_NUM, )
-                s1, r, done, _ = envs.step(a.tolist())
+                s1, r, done, envs_info = envs.step(a.tolist())
                 done = done.any()
                 ep_ret += r.sum(axis=-1)  # 对各agent的奖励求和
                 ep_len += 1
                 self.logger.log(interaction=None)
-            if ep_ret.max() > self.best_test_episode_reward:
+            if not self.input_args.test and ep_ret.max() > self.best_test_episode_reward:
+                max_id = ep_ret.argmax()
                 self.best_test_episode_reward = ep_ret.max()
                 best_eval_trajs = self.envs_test.get_saved_trajs()
                 self.dummy_env.save_trajs_2(
-                    best_eval_trajs[ep_ret.argmax()], phase='test', is_newbest=True)
+                    best_eval_trajs[max_id], phase='test', is_newbest=True)
+                write_output(envs_info[max_id], self.run_args.output_dir, tag='test')
             returns += [ep_ret.sum()]
             lengths += [ep_len]
         returns = np.stack(returns, axis=0)
         lengths = np.stack(lengths, axis=0)
         self.logger.log(test_episode_reward=returns.mean(),
                         test_episode_len=lengths.mean(), test_round=None)
-        # print(returns)
-        print(f"{self.n_test} episodes average accumulated reward: {returns.mean()}")
 
-        # with open(f"checkpoints/{self.name}/test.pickle", "wb") as f:
-        #     pickle.dump(episodes, f)
-        # with open(f"checkpoints/{self.name}/test.txt", "w") as f:
-        #     for episode in episodes:
-        #         for step in episode:
-        #             f.write(f"{step[0]}, {step[1]}, {step[2]}\n")
-        #         f.write("\n")
-        return returns.mean()
+        average_ret = returns.mean()
+        print(f"{self.n_test} episodes average accumulated reward: {average_ret}")
+        return average_ret
 
     def rollout_env(self):  # 与环境交互得到trajs
         """
@@ -177,18 +186,18 @@ class OnPolicyRunner:
         """
         trajBuffer = TrajectoryBuffer(device=self.device)
         envs = self.envs_learn
-        for t in range(int(self.rollout_length/self.input_args.n_thread)):  # 加入向量环境后，控制总训练步数不变
+        for t in range(int(self.rollout_length / self.input_args.n_thread)):  # 加入向量环境后，控制总训练步数不变
             s = envs.get_obs_from_outside()
             dist = self.agent.act(s)
             a = []
             logp = []
-            for key in ['branch1','branch2']:
+            for key in ['branch1', 'branch2']:
                 a_tmp = dist[key].sample()
                 logp_tmp = dist[key].log_prob(a_tmp)
                 a.append(a_tmp)
                 logp.append(logp_tmp)
-            a = torch.stack(a,dim=-1)
-            logp=torch.stack(logp,dim=-1)
+            a = torch.stack(a, dim=-1)
+            logp = torch.stack(logp, dim=-1)
             # if len(a.shape) == 2 and a.shape[0] == 1:  # for IA2C and IC3Net  # 注意：向量环境下要改~ a.shape[0]已经不是IA2C和IC3Net会额外添加的batch的维度了，我猜需要维度从0改成1
             #     a = a.squeeze(0)
             #     logp = logp.squeeze(0)
@@ -196,8 +205,8 @@ class OnPolicyRunner:
             s1, r, done, env_info = envs.step(a.tolist())
             done = done.any()
             trajBuffer.store(s, a, r, s1,
-                       np.full((self.n_thread, self.num_agent), done),
-                       logp)
+                             np.full((self.n_thread, self.num_agent), done),
+                             logp)
             episode_r = r
             assert episode_r.ndim > 1
             episode_r = episode_r.sum(axis=-1)  # 对各agent奖励求和
@@ -211,12 +220,13 @@ class OnPolicyRunner:
                 self.logger.log(mean_episode_reward=ep_r.mean(), episode_len=self.episode_len, episode=None)
                 self.logger.log(max_episode_reward=ep_r.max(), episode_len=self.episode_len, episode=None)
                 if ep_r.max() > self.best_episode_reward:
+                    max_id = ep_r.argmax()
                     self.best_episode_reward = ep_r.max()
                     self.agent.save_nets(dir_name=self.run_args.output_dir, is_newbest=True)
                     best_train_trajs = self.envs_learn.get_saved_trajs()
                     self.dummy_env.save_trajs_2(
-                        best_train_trajs[self.episode_reward.argmax()], phase='train', is_newbest=True)
-
+                        best_train_trajs[max_id], phase='train', is_newbest=True)
+                    write_output(env_info[max_id], self.run_args.output_dir)
                 self.logger.log(QoI=sum(d['QoI'] for d in env_info) / len(env_info),
                                 episodic_aoi=sum(d['episodic_aoi'] for d in env_info) / len(env_info),
                                 aoi_satis_ratio=sum(d['aoi_satis_ratio'] for d in env_info) / len(env_info),
@@ -258,13 +268,13 @@ class OnPolicyRunner:
             dist = self.agent.act(s)
             a = []
             logp = []
-            for key in ['branch1','branch2']:
+            for key in ['branch1', 'branch2']:
                 a_tmp = dist[key].sample()
                 logp_tmp = dist[key].log_prob(a_tmp)
                 a.append(a_tmp)
                 logp.append(logp_tmp)
-            a = torch.stack(a,dim=-1)
-            logp=torch.stack(logp,dim=-1)
+            a = torch.stack(a, dim=-1)
+            logp = torch.stack(logp, dim=-1)
             r, s1, done, _ = self.agent.model_step(s, a)
             trajBuffer.store(s, a, r, s1, done, logp)
             s = s1
