@@ -35,7 +35,7 @@ def write_output(info, output_dir, tag='train'):
                 f"aoi_satis_ratio: {'%.3f' % info['aoi_satis_ratio']} "
                 f"tx_satis_ratio: {'%.3f' % info['tx_satis_ratio']} "
                 f"energy_consuming: {'%.3f' % info['energy_consuming']} "
-                # + '\n'
+                + '\n'
                 )
 
 
