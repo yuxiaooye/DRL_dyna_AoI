@@ -30,6 +30,7 @@ class EnvMobile():
         self.rm = Roadmap(self.input_args.dataset, self.config.dict)
 
         self.USE_SNRMAP = self.input_args.use_snrmap
+        self.KNN_COEFFCICENT = self.input_args.knn_coefficient
         self.MAP_X = self.rm.max_dis_x
         self.MAP_Y = self.rm.max_dis_y
         self.WEIGHTED_MODE = self.config("weighted_mode")
@@ -238,6 +239,17 @@ class EnvMobile():
             satis_ratio = sum(sum_rates >= self.RATE_THRESHOLD) / visit_num  # 不统计没被访问的poi，所以分子不是POI_NUM
             self.tx_satis_ratio_list.append(satis_ratio)
             uav_rewards *= satis_ratio  # 把aoi的收集奖励根据tx satis ratio scale一下
+            
+        if self.KNN_COEFFCICENT> -1:
+            uav_trajectory = []
+            for i in range(self.UAV_NUM):
+                uav_trajectory.extend(self.uav_trace[i])
+            d_map = list(map(lambda x: ((x[0]-self.uav_position[uav_index][0])**2+(x[1]-self.uav_position[uav_index][1])**2)**0.5, uav_trajectory))
+            d_map.sort(reverse=False)
+
+            intrinsic_reward =np.mean(d_map[:10])/1000*self.KNN_COEFFCICENT if len(d_map)>0 else 0 
+            #print("{},{}".format(uav_rewards[uav_index],intrinsic_reward))
+            uav_rewards[uav_index] += intrinsic_reward
 
         done = self._is_episode_done()
         if not done:

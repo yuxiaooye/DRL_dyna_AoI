@@ -138,6 +138,8 @@ def override(alg_args, run_args, input_args, env):
         run_args.name += f'_G2AHiddenDim={input_args.g2a_hidden_dim}'
     if input_args.tau != 0.01:
         run_args.name += f'_TAU={input_args.tau}'
+    if input_args.knn_coefficient != -1:
+        run_args.name += f'_KNN={input_args.knn_coefficient}'
     # if not input_args.use_extended_value:
     #     run_args.name += f'_NotUseExtendedValue'
     # if input_args.use_mlp_model:
@@ -199,6 +201,7 @@ def parse_args():
     parser.add_argument('--aoith', default=60, type=int)
     parser.add_argument('--txth', default=5, type=int)
     parser.add_argument('--uav_height', default=100, type=int)
+    parser.add_argument('--knn_coefficient', default=-1, type=float,help='knn奖励系数')
 
     ## MDP
     parser.add_argument('--max_episode_step', type=int, default=120)
