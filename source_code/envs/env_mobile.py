@@ -20,7 +20,6 @@ class EnvMobile():
     def __init__(self, env_args, input_args, **kwargs):
         assert input_args.fixed_col_time
 
-
         self.config = Config(env_args, input_args)
         self.input_args = input_args
         self.debug = self.input_args.debug
@@ -50,11 +49,13 @@ class EnvMobile():
         self.POI_NUM = self.config("poi_num")
         self.RATE_THRESHOLD = self.config("RATE_THRESHOLD")
         self.AoI_THRESHOLD = self.config("AoI_THRESHOLD")
-        self.aoi_vio_penalty_ratio = self.config("aoi_vio_penalty_ratio")
+        self.aoi_vio_penalty_scale = self.config("aoi_vio_penalty_scale")
+        self.tx_vio_penalty_scale = self.config("tx_vio_penalty_scale")
         self.bonus_reward_ratio = self.config("bonus_reward_ratio")
         self.UPDATE_USER_NUM = self.config("update_user_num")
         self.USER_DATA_AMOUNT = self.config("user_data_amount")
         self.UAV_HEIGHT = self.config("uav_height")
+        self.hao02191630 = self.config("hao02191630")
 
         self.n_agents = self.UAV_NUM
         self.n_actions = self.ACTION_ROOT
@@ -73,14 +74,12 @@ class EnvMobile():
         self.cell_span_x = self.MAP_X / self.cell_num
         self.cell_span_y = self.MAP_Y / self.cell_num
 
-
         '''these mat is **read-only** 因此可以放在init中 而不必放在reset中每次episode开始时都读'''
         self.poi_mat = self.rm.init_pois(self.MAX_EPISODE_STEP)
 
-
         # self.poi_arrival = np.load(os.path.join(data_file_dir, 'arrival.npy'))[:self.POI_NUM, :self.MAX_EPISODE_STEP + 1]  # shape = (33, 121)，其中33是poi数，121是episode的时间步数
         # 每个时间步都生成一个包  # OK
-        self.poi_arrival = np.ones((self.POI_NUM, self.MAX_EPISODE_STEP+1))  # 下标从0到120
+        self.poi_arrival = np.ones((self.POI_NUM, self.MAX_EPISODE_STEP + 1))  # 下标从0到120
 
         # self.poi_QoS = np.load(os.path.join(data_file_dir, f'QoS{self.MAX_EPISODE_STEP}/poi_QoS{self.input_args.dyna_level}.npy'))
 
@@ -100,7 +99,6 @@ class EnvMobile():
         self.obs = None
         self.stacked_obs = None
         self.reset()
-
 
     def reset(self):
 
@@ -158,8 +156,8 @@ class EnvMobile():
     def _human_move(self):
         self.poi_position = copy.deepcopy(self.poi_mat[:, self.step_count, :])
 
-
     def _uavs_access_users(self, max_access_num):
+        max_access_num = np.array(max_access_num) + 1  # +1将0~8映射到1~9
         # 读: self.uav_position[uav_index]
         # 读: self.poi_position
         access_lists = []
@@ -169,12 +167,14 @@ class EnvMobile():
             triple = [(poi_id,) + self._get_data_rate(uav_pos, poi_pos) for poi_id, poi_pos in enumerate(self.poi_position)]
             sorted_triple_in_range = sorted(
                 list(filter(lambda x: x[2] < self.COLLECT_RANGE, triple)), key=lambda x: x[2])
-            access_list = sorted_triple_in_range[:max_access_num[uav_id]+1]  # +1将0~8映射到1~9
+            access_list = sorted_triple_in_range[:max_access_num[uav_id]]
             # 每个user实际分到的带宽需要平分
-            access_list = list(map(lambda x: (x[0], x[1]/len(access_list), x[2]), access_list))
+            if self.hao02191630:
+                access_list = list(map(lambda x: (x[0], x[1] / max_access_num[uav_id], x[2]), access_list))  # 惩罚在周围人少的时候选择服务很多的人
+            else:
+                access_list = list(map(lambda x: (x[0], x[1] / len(access_list), x[2]), access_list))
             access_lists.append(access_list)
         return access_lists
-
 
     def step(self, action):
         action1, action2 = [item[0] for item in action], [item[1] for item in action]
@@ -195,10 +195,10 @@ class EnvMobile():
             self._use_energy(uav_index, energy_consuming)
 
         # uav收集
-        ## 确定uav的服务对象，元素是（poi_id，data rate）二元组
+        ## 确定uav的服务对象，元素是（poi_id，data rate，dis）三元组
         access_lists = self._uavs_access_users(action2)
         for uav_index in range(self.UAV_NUM):
-            self._use_energy(uav_index,len(access_lists[uav_index])*10) # 服务每个用户带来10J消耗
+            self._use_energy(uav_index, len(access_lists[uav_index]) * 10)  # 服务每个用户带来10J消耗
 
         ## 计算各poi的总data rate
         sum_rates = np.zeros(self.POI_NUM)
@@ -206,7 +206,6 @@ class EnvMobile():
         for uav_id, access_list in enumerate(access_lists):
             for poi_id, rate, dis in access_list:
                 sum_rates[poi_id] += rate
-
 
         ## 若poi的总data rate满足阈值，则更新aoi
 
@@ -220,7 +219,7 @@ class EnvMobile():
             self.poi_aoi[poi_id] = 0  # 戴总是reset到1，不过我后面会在check_arrival()里+=1，和戴总的等价
 
             ## 计算poi_aoi_area
-            self.poi_aoi_area[poi_id] += 1/2 * (before_reset * self.TIME_SLOT)**2  # 加一块三角形的面积
+            self.poi_aoi_area[poi_id] += 1 / 2 * (before_reset * self.TIME_SLOT) ** 2  # 加一块三角形的面积
 
             ## 计算aoi reset reward和bonus reward
             # 当年戴总infocom2022的定义是收集前平均aoi减收集后平均aoi，和现在我用的一致
@@ -238,7 +237,10 @@ class EnvMobile():
         if visit_num != 0:
             satis_ratio = sum(sum_rates >= self.RATE_THRESHOLD) / visit_num  # 不统计没被访问的poi，所以分子不是POI_NUM
             self.tx_satis_ratio_list.append(satis_ratio)
-            uav_rewards *= satis_ratio  # 把aoi的收集奖励根据tx satis ratio scale一下
+            # uav_rewards *= satis_ratio  # 把aoi的收集奖励根据tx satis ratio scale一下
+            penalty_r = -np.ones(self.UAV_NUM) * (1-satis_ratio) * self.tx_vio_penalty_scale
+            self.tx_penalty_reward_list.extend((penalty_r / self.tx_vio_penalty_scale).tolist())
+            uav_rewards += penalty_r
             
         if self.KNN_COEFFCICENT> -1:
             uav_trajectory = []
@@ -276,15 +278,15 @@ class EnvMobile():
 
         # 惩罚基于当前时刻违反AoIth的user的比例，所有uav的惩罚相同
         if em_now != 0:
-            penalty_r = -np.ones(self.UAV_NUM) * (em_now / self.POI_NUM) * self.aoi_vio_penalty_ratio
-            self.aoi_penalty_reward_list.extend((penalty_r/self.aoi_vio_penalty_ratio).tolist())
+            penalty_r = -np.ones(self.UAV_NUM) * (em_now / self.POI_NUM) * self.aoi_vio_penalty_scale
+            self.aoi_penalty_reward_list.extend((penalty_r / self.aoi_vio_penalty_scale).tolist())
             uav_rewards += penalty_r
 
         '''step3. episode结束时的后处理'''
         info = {}
         if done:
             for poi_id in range(self.POI_NUM):  # 最后补一块三角形的面积，清算
-                self.poi_aoi_area[poi_id] += 1/2 * (self.poi_aoi[poi_id] * self.TIME_SLOT) ** 2
+                self.poi_aoi_area[poi_id] += 1 / 2 * (self.poi_aoi[poi_id] * self.TIME_SLOT) ** 2
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", category=RuntimeWarning)
                 info = self.summary_info(info)
@@ -303,14 +305,14 @@ class EnvMobile():
         info['episodic_aoi'] = episodic_aoi
         info['aoi_satis_ratio'] = aoi_satis_ratio
         info['tx_satis_ratio'] = tx_satis_ratio
-        info['energy_consuming'] = t_e / 10**6  # 单位：MJ
+        info['energy_consuming'] = t_e / 10 ** 6  # 单位：MJ
         info['energy_consuming_ratio'] = energy_consuming_ratio
-        info['QoI'] = min(aoi_satis_ratio, tx_satis_ratio) / (t_e/self.UAV_NUM/10**6)
+        info['QoI'] = min(aoi_satis_ratio, tx_satis_ratio) / (t_e / self.UAV_NUM / 10 ** 6)
         info['aoi_reward'] = np.mean(self.aoi_reward_list)
         info['aoi_penalty_reward'] = np.mean(self.aoi_penalty_reward_list) if len(self.aoi_penalty_reward_list) != 0 else 0
+        info['tx_penalty_reward'] = np.mean(self.tx_penalty_reward_list) if len(self.tx_penalty_reward_list) != 0 else 0
 
         return info
-
 
     def _cal_distance(self, pos1, pos2):
         assert len(pos1) == len(
@@ -347,8 +349,6 @@ class EnvMobile():
             new_x, new_y = self.uav_position[uav_index]
 
         return new_x, new_y, distance, min(self.uav_energy[uav_index], energy_consume)
-
-
 
     def _get_vector_by_action(self, action):
         single = 1.5
@@ -422,7 +422,7 @@ class EnvMobile():
         distance = self._cal_distance(uav_position, poi_position)
         theta = self._cal_theta(uav_position, poi_position)
         path_loss = 54.05 + 10 * eta * math.log10(distance) + (-19.9) / (1 + alpha * math.exp(-beta * (theta - alpha)))
-        
+
         # fc= 24
         # path_loss2 = (1 + alpha * math.exp(-beta * (theta - alpha)))*(28.0+22*math.log10(distance)+20*math.log10(fc))+(1-(1 + alpha * math.exp(-beta * (theta - alpha))))*(-17.5+(46-7*math.log10(100))*math.log10(distance)+20*math.log10(4*math.pi*fc/3))
         # print(path_loss,path_loss2)
@@ -485,14 +485,15 @@ class EnvMobile():
                 obs.append(poi_aoi / 121)
 
             '''添加未来的信息供当前时刻的agent决策'''
+
             def check_future_arrival(poi_index, t):
                 delta_step = 121 - self.MAX_EPISODE_STEP
-                stub = min(delta_step + self.step_count+t+1, self.MAX_EPISODE_STEP)  # 防止episode接近结束时下一句越界
+                stub = min(delta_step + self.step_count + t + 1, self.MAX_EPISODE_STEP)  # 防止episode接近结束时下一句越界
                 is_arrival = self.poi_arrival[poi_index, stub]
                 return is_arrival
 
             for t in range(self.input_args.future_obs):  # 0 or 1 or 2
-                stub = min(self.step_count+t+1, self.MAX_EPISODE_STEP)
+                stub = min(self.step_count + t + 1, self.MAX_EPISODE_STEP)
                 next_pos = self.poi_mat[poi_index, stub, :]
                 obs.append(next_pos[0] / self.MAP_X)
                 obs.append(next_pos[1] / self.MAP_Y)
@@ -509,7 +510,6 @@ class EnvMobile():
         obs = np.asarray(obs)
         return obs
 
-
     def _get_snrmap(self, uav_id):
         snrmap = np.zeros((self.cell_num, self.cell_num))  # 已将snrmap改为人群预测图
 
@@ -517,27 +517,25 @@ class EnvMobile():
         visible = np.zeros((self.cell_num, self.cell_num))
         for i in range(self.cell_num):
             for j in range(self.cell_num):
-                center = ((i+1/2)*self.cell_span_x, (j+1/2)*self.cell_span_y)
-                #if self._cal_distance(center, self.uav_position[uav_id]) < self.agent_field:
-                if 1>0:
+                center = ((i + 1 / 2) * self.cell_span_x, (j + 1 / 2) * self.cell_span_y)
+                # if self._cal_distance(center, self.uav_position[uav_id]) < self.agent_field:
+                if 1 > 0:
                     visible[i][j] = 1
                 else:
                     visible[i][j] = 0
 
         # 要的是下一步user的位置，所以+1
-        next_poi_positions = copy.deepcopy(self.poi_mat[:, min(self.step_count+1, self.poi_mat.shape[1]-1), :])  # 终止状态越界，取min
+        next_poi_positions = copy.deepcopy(self.poi_mat[:, min(self.step_count + 1, self.poi_mat.shape[1] - 1), :])  # 终止状态越界，取min
         for poi_index, next_poi_position in enumerate(next_poi_positions):
             x, y = next_poi_position
-            i = np.clip(int(x/self.cell_span_x), 0, self.cell_num-1)
-            j = np.clip(int(y/self.cell_span_y), 0, self.cell_num-1)
+            i = np.clip(int(x / self.cell_span_x), 0, self.cell_num - 1)
+            j = np.clip(int(y / self.cell_span_y), 0, self.cell_num - 1)
             if visible[i][j]:
                 snrmap[i][j] += 1  # 根据用户位置把ans加到具体的cell中
 
         snrmap = snrmap / self.POI_NUM  # 归一化
         snrmap = snrmap.reshape(self.cell_num * self.cell_num, )
         return snrmap.tolist()
-
-
 
     def get_obs_size(self):
         size = 2 * self.UAV_NUM + self.POI_NUM * self.poi_property_num + 1  # 1是step_count
@@ -589,7 +587,6 @@ class EnvMobile():
     def check_arrival(self, step=0):  # 数据生成
         for i in range(self.POI_NUM):
             self.poi_aoi[i] += 1
-
 
     def _plot_aoi_trend(self, poi_index):
         assert len(self.poi_history) == 121

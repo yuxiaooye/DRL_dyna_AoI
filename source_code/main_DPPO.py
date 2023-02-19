@@ -116,7 +116,8 @@ def override(alg_args, run_args, input_args, env):
         run_args.name += f'_UAVHeight={input_args.uav_height}'
     if input_args.poi_num is not None:
         run_args.name += f'_Users={input_args.poi_num}'
-
+    if input_args.hao02191630:
+        run_args.name += f'_hao02191630'
     ## MDP
     if input_args.max_episode_step != 120:
         run_args.name += f'_MaxTs={input_args.max_episode_step}'
@@ -124,6 +125,10 @@ def override(alg_args, run_args, input_args, env):
         run_args.name += f'_FutureObs={input_args.future_obs}'
     if input_args.use_snrmap:
         run_args.name += f'_UseSNRMAP'
+    if input_args.aVPS != 0.2:
+        run_args.name += f'_aVPS={input_args.aVPS}'
+    if input_args.tVPS != 0.2:
+        run_args.name += f'_tVPS={input_args.tVPS}'
 
     # tune algo
     if input_args.lr is not None:
@@ -209,11 +214,14 @@ def parse_args():
     parser.add_argument('--txth', default=5, type=int)
     parser.add_argument('--uav_height', default=100, type=int)
     parser.add_argument('--knn_coefficient', default=-1, type=float,help='knn奖励系数')
+    parser.add_argument('--hao02191630', action='store_false')
 
     ## MDP
     parser.add_argument('--max_episode_step', type=int, default=120)
     parser.add_argument('--future_obs', type=int, default=0)
-    parser.add_argument('--use_snrmap', action='store_true')  # shrotcut are always used
+    parser.add_argument('--use_snrmap', action='store_true')  # shrotcut is always used
+    parser.add_argument('--aVPS', type=float, default=0.2)
+    parser.add_argument('--tVPS', type=float, default=0.2)
     args = parser.parse_args()
 
     # if args.multi_mlp:
@@ -270,7 +278,7 @@ else:
     raise NotImplementedError
 
 env_args = {  # 这里环境类的参数抄昊宝
-    "emergency_threshold": 100, 
+    "emergency_threshold": 100,
     "max_episode_step": input_args.max_episode_step,
     "collect_range": input_args.snr,
     "initial_energy": input_args.init_energy,
@@ -280,6 +288,9 @@ env_args = {  # 这里环境类的参数抄昊宝
     "AoI_THRESHOLD": input_args.aoith,
     "RATE_THRESHOLD": input_args.txth,
     "uav_height": input_args.uav_height,
+    "aoi_vio_penalty_scale": input_args.aVPS,
+    "tx_vio_penalty_scale": input_args.tVPS,
+    "hao02191630": input_args.hao02191630,
 }
 if input_args.poi_num is not None:
     env_args["poi_num"] = input_args.poi_num

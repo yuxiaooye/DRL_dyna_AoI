@@ -173,7 +173,6 @@ def render_HTML(output_dir, tag='train', draw_snrth=False, traj_filename='eps_be
 
     # save
     save_file = os.path.join(output_dir, f'vis_{tag}.html')
-    # print('------save_file = ', save_file)
     map.get_root().save(save_file)
 
     print('OK!')

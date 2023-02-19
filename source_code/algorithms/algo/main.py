@@ -235,6 +235,7 @@ class OnPolicyRunner:
                                 energy_consuming_ratio=sum(d['energy_consuming_ratio'] for d in env_info) / len(env_info),
                                 aoi_reward=sum(d['aoi_reward'] for d in env_info) / len(env_info),
                                 aoi_penalty_reward=sum(d['aoi_penalty_reward'] for d in env_info) / len(env_info),
+                                tx_penalty_reward=sum(d['tx_penalty_reward'] for d in env_info) / len(env_info),
                                 )
                 '''执行env的reset'''
                 try:

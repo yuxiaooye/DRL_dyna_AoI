@@ -1,15 +1,10 @@
 # !/bin/sh
 source activate yyx_ishen
-group='0219-tune-mapsize'
-for dataset in 'NCSU' 'KAIST';
+group='0219-adjust-VPS-knn'
+for aVPS in 0.2 0.3;
 do
-for map_size in 4 6 8 10;
+for tVPS in 0.05 0.1;
 do
-if [ $dataset == 'NCSU' ]
-then
-nohup python -u main_DPPO.py --group ${group} --poi_num 50 --use_snrmap --map_size ${map_size} --user yyx --device cuda:0 &
-else
-nohup python -u main_DPPO.py --group ${group} --dataset ${dataset} --poi_num 122 --use_snrmap --map_size ${map_size} --user yyx --device cuda:1 &
-fi
+nohup python -u main_DPPO.py --group ${group} --poi_num 50 --algo G2ANet --aVPS $aVPS --tVPS $tVPS --knn_coefficient 0.5 --use_snrmap --user yyx --device cuda:7 &
 done
 done
