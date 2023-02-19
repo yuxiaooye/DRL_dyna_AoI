@@ -174,7 +174,7 @@ class EnvMobile():
                 access_list = list(map(lambda x: (x[0], x[1] / max_access_num[uav_id], x[2]), access_list))  # 惩罚在周围人少的时候选择服务很多的人
             else:
                 access_list = list(map(lambda x: (x[0], x[1] / len(access_list), x[2]), access_list))
-            print(f'选择接入{max_access_num[uav_id]}人，sensing range内有{len(sorted_triple_in_range)}人')  # TODO DASAP
+            # print(f'选择接入{max_access_num[uav_id]}人，sensing range内有{len(sorted_triple_in_range)}人')
             access_lists.append(access_list)
         return access_lists
 
@@ -236,10 +236,13 @@ class EnvMobile():
                 for pid, rate, dis in access_list:
                     if poi_id == pid:
                         # 收集aoi越大的user，奖励越大；rate/sum_rate相当于credit assignment
-                        r = (before_reset / self.MAX_EPISODE_STEP) * (rate / sum_rate)
+                        r = (before_reset / self.MAX_EPISODE_STEP) * (rate / sum_rate)  # TODO 可以把后面的删掉
                         uav_rewards[uav_id] += r
                         rate_contribute_to_that_poi[uav_id] = rate
+
             self.aoi_reward_list.extend(uav_rewards)  # fix bug
+
+            print(uav_rewards)
 
         visit_num = sum(sum_rates > 0)
         if visit_num != 0:
@@ -268,11 +271,14 @@ class EnvMobile():
         '''step2. 维护当前时间步对aoi值的相关统计值'''
         now_aoi = 0  # 当前时间步所有poi的aoi值总和
         em_now = 0
+        soft_em_now = 0
         aoi_list = []  # 当前时间步各poi的aoi值
         for i in range(self.POI_NUM):
             aoi = self.poi_aoi[i]
             if aoi > self.AoI_THRESHOLD:  # 超过了AoI阈值
                 em_now += 1
+            if aoi > 0.8 * self.AoI_THRESHOLD:
+                soft_em_now += 1
             now_aoi += aoi
             aoi_list.append(aoi)
 
@@ -291,9 +297,9 @@ class EnvMobile():
         self.aoi_history.append(now_aoi / self.POI_NUM)
         self.aoi_vio_ratio_list.append(em_now / self.POI_NUM)
 
-        # 惩罚基于当前时刻违反AoIth的user的比例，所有uav的惩罚相同
-        if em_now != 0:
-            penalty_r = -np.ones(self.UAV_NUM) * (em_now / self.POI_NUM) * self.aoi_vio_penalty_scale
+        # 惩罚基于当前时刻soft违反AoIth的user的比例，所有uav的惩罚相同
+        if soft_em_now != 0:
+            penalty_r = -np.ones(self.UAV_NUM) * (soft_em_now / self.POI_NUM) * self.aoi_vio_penalty_scale
             self.aoi_penalty_reward_list.extend((penalty_r / self.aoi_vio_penalty_scale).tolist())
             uav_rewards += penalty_r
 

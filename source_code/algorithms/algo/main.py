@@ -34,6 +34,7 @@ def write_output(info, output_dir, tag='train'):
                 f"episodic_aoi: {'%.3f' % info['episodic_aoi']} "
                 f"aoi_satis_ratio: {'%.3f' % info['aoi_satis_ratio']} "
                 f"tx_satis_ratio: {'%.3f' % info['tx_satis_ratio']} "
+                f"soft_tx_satis_ratio: {'%.3f' % info['soft_tx_satis_ratio']} "
                 f"energy_consuming: {'%.3f' % info['energy_consuming']} "
                 + '\n'
                 )
@@ -162,13 +163,14 @@ class OnPolicyRunner:
                 ep_ret += r.sum(axis=-1)  # 对各agent的奖励求和
                 ep_len += 1
                 self.logger.log(interaction=None)
-            if not self.input_args.test and ep_ret.max() > self.best_test_episode_reward:
+            if ep_ret.max() > self.best_test_episode_reward:
                 max_id = ep_ret.argmax()
                 self.best_test_episode_reward = ep_ret.max()
                 best_eval_trajs = self.envs_test.get_saved_trajs()
-                self.dummy_env.save_trajs_2(
-                    best_eval_trajs[max_id], phase='test', is_newbest=True)
                 write_output(envs_info[max_id], self.run_args.output_dir, tag='test')
+                if not self.input_args.test:
+                    self.dummy_env.save_trajs_2(
+                        best_eval_trajs[max_id], phase='test', is_newbest=True)
             returns += [ep_ret.sum()]
             lengths += [ep_len]
         returns = np.stack(returns, axis=0)
@@ -224,13 +226,15 @@ class OnPolicyRunner:
                     self.best_episode_reward = ep_r.max()
                     self.agent.save_nets(dir_name=self.run_args.output_dir, is_newbest=True)
                     best_train_trajs = self.envs_learn.get_saved_trajs()
+                    write_output(env_info[max_id], self.run_args.output_dir)
                     self.dummy_env.save_trajs_2(
                         best_train_trajs[max_id], phase='train', is_newbest=True)
-                    write_output(env_info[max_id], self.run_args.output_dir)
+
                 self.logger.log(QoI=sum(d['QoI'] for d in env_info) / len(env_info),
                                 episodic_aoi=sum(d['episodic_aoi'] for d in env_info) / len(env_info),
                                 aoi_satis_ratio=sum(d['aoi_satis_ratio'] for d in env_info) / len(env_info),
                                 tx_satis_ratio=sum(d['tx_satis_ratio'] for d in env_info) / len(env_info),
+                                soft_tx_satis_ratio=sum(d['soft_tx_satis_ratio'] for d in env_info) / len(env_info),
                                 energy_consuming=sum(d['energy_consuming'] for d in env_info) / len(env_info),
                                 energy_consuming_ratio=sum(d['energy_consuming_ratio'] for d in env_info) / len(env_info),
                                 aoi_reward=sum(d['aoi_reward'] for d in env_info) / len(env_info),

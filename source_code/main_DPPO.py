@@ -237,8 +237,7 @@ def parse_args():
         args.n_thread = 1
         args.output_dir = f'{args.checkpoint}/test'
 
-    if args.dataset == 'NCSU':
-        assert args.update_num == 15
+    if args.dataset == 'NCSU' and args.update_num == 15:
         args.update_num = 10  # 在NCSU的默认值调小
 
 
