@@ -100,7 +100,8 @@ def override(alg_args, run_args, input_args, env):
         run_args.name += f'_InitEnergy={input_args.init_energy}'
     if input_args.user_data_amount != 1:
         run_args.name += f'_DataAmount={input_args.user_data_amount}'
-    if input_args.update_num != 10:
+    if input_args.dataset == 'KAIST' and input_args.update_num != 15 or \
+        input_args.dataset == 'NCSU' and input_args.update_num != 10:
         run_args.name += f'_UpdateNum={input_args.update_num}'
     if not input_args.fixed_range:
         run_args.name += f'_NotFixedRange'
@@ -235,6 +236,11 @@ def parse_args():
         args.group = 'test'
         args.n_thread = 1
         args.output_dir = f'{args.checkpoint}/test'
+
+    if args.dataset == 'NCSU':
+        assert args.update_num == 15
+        args.update_num = 10  # 在NCSU的默认值调小
+
 
     return args
 

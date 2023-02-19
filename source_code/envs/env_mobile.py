@@ -119,6 +119,7 @@ class EnvMobile():
         self.aoi_reward_list = []
         self.aoi_penalty_reward_list = []
         self.tx_penalty_reward_list = []
+        self.soft_tx_satis_ratio_list = []
 
         self.aoi_history = [0]  # episode结束后，长度为121。为什么初始时要有一个0？
 
@@ -262,13 +263,23 @@ class EnvMobile():
         now_aoi = 0  # 当前时间步所有poi的aoi值总和
         em_now = 0
         aoi_list = []  # 当前时间步各poi的aoi值
+        emergency_list = []
         for i in range(self.POI_NUM):
             aoi = self.poi_aoi[i]
             # print('aoi=', aoi)
             if aoi > self.AoI_THRESHOLD:  # 超过了AoI阈值
                 em_now += 1
+                emergency_list.append(i)
             now_aoi += aoi
             aoi_list.append(aoi)
+
+        if emergency_list == []:
+            self.soft_tx_satis_ratio_list.append(1)
+        else:
+            emer_satis_num = len(list(
+                filter(lambda x: x[0] in emergency_list and x[1] > self.RATE_THRESHOLD, enumerate(sum_rates))
+            ))
+            self.soft_tx_satis_ratio_list.append(emer_satis_num/len(emergency_list))
 
         self.poi_history.append({
             'pos': copy.deepcopy(self.poi_position),
@@ -302,10 +313,12 @@ class EnvMobile():
         episodic_aoi = sum(self.poi_aoi_area) / (self.POI_NUM * self.MAX_EPISODE_STEP * self.TIME_SLOT * self.TIME_SLOT)
         aoi_satis_ratio = sum(1 - np.array(self.aoi_vio_ratio_list)) / self.step_count
         tx_satis_ratio = sum(self.tx_satis_ratio_list) / len(self.tx_satis_ratio_list)
+        soft_tx_satis_ratio = sum(self.soft_tx_satis_ratio_list) / len(self.soft_tx_satis_ratio_list)
         energy_consuming_ratio = t_e / (self.UAV_NUM * self.INITIAL_ENERGY)
         info['episodic_aoi'] = episodic_aoi
         info['aoi_satis_ratio'] = aoi_satis_ratio
         info['tx_satis_ratio'] = tx_satis_ratio
+        info['soft_tx_satis_ratio'] = soft_tx_satis_ratio
         info['energy_consuming'] = t_e / 10 ** 6  # 单位：MJ
         info['energy_consuming_ratio'] = energy_consuming_ratio
         info['QoI'] = min(aoi_satis_ratio, tx_satis_ratio) / (t_e / self.UAV_NUM / 10 ** 6)
