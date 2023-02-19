@@ -68,8 +68,8 @@ python main_DPPO.py --algo G2ANet --use_snrmap
 ├── events.out.tfevents.1675849821.omnisky.107733.0  # tensorboard可视化
 ├── Models  # 保存最优actor模型
 ├── params.json  # 记录本次实验的参数防止遗忘
-├── test_saved_trajs  # 测试episode的最优uav轨迹
 └── train_saved_trajs  # 训练episode的最优uav轨迹
+└── train_output.txt  # 记录最优模型对应的metric
 └── vis.html  # 根据最优uav轨迹绘制的html可视化文件
 ```
 
@@ -95,11 +95,12 @@ python tools/post/bat_vis.py --group_dir <GROUP_DIR>
 
 ## How to inference
 
-加载保存的actor模型，进行测试：
-
+加载模型进行测试：
 ```sh
 cd source_code
-python main_DPPO.py --test --init_checkpoint <ckpt_dir>  # <ckpt_dir> usually ends with "best_actor.pt"
+python main_DPPO.py --test --init_checkpoint <OUTPUT_DIR>  # <OUTPUT_DIR> contains folder 'Models'
 ```
+测试结果默认保存在`<OUTPUT_DIR>/test`路径下
 
-测试结果默认保存在`runs/debug`路径下
+（训练和测试的评测是同一套代码，所以直接用train_output.txt填实验即可）
+

@@ -69,7 +69,7 @@ class EnvMobile():
         # self.action_space = spaces.Discrete(9)
         self.action_space = spaces.MultiDiscrete([9, self.UPDATE_NUM])
 
-        self.cell_num = 6
+        self.cell_num = input_args.map_size
         self.cell_span_x = self.MAP_X / self.cell_num
         self.cell_span_y = self.MAP_Y / self.cell_num
 

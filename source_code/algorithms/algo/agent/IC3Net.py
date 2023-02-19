@@ -251,8 +251,6 @@ class IC3Net(nn.ModuleList, YyxAgentBase):
         hidden_state = s_encoding + self.group_inference(self.main_models, s_encoding) + deal_message
         return hidden_state
 
-    def save(self, info=None):
-        self.logger.save(self, info=info)
 
 
     def act(self, s, requires_log=False):

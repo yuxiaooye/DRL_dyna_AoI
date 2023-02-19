@@ -29,8 +29,6 @@ def MLP(sizes, activation=nn.ReLU, output_activation=nn.Identity, have_last_bran
     return nn.Sequential(*layers)
 
 
-
-
 class YyxMLPModel(nn.Module):  # 在更深入地重复造轮子之前，先浏览一下这个脚本里有没有能用的东西~
     def __init__(self, logger, obs_dim, p_args, multi_mlp=False):
         super().__init__()
@@ -309,7 +307,6 @@ class GraphConvolutionalModel(nn.Module):
         return node_embedding, state_head, reward_head, done_head
 
 
-
 class CategoricalActor(nn.Module):
     """ 
     always returns a distribution
@@ -327,7 +324,7 @@ class CategoricalActor(nn.Module):
             # snr_net_args = copy.deepcopy(net_args)
             # snr_net_args['sizes'] = [32 + self.snrmap_features, 32, 9]
 
-            #self.snr_network = net_fn(**snr_net_args)
+            # self.snr_network = net_fn(**snr_net_args)
             pass
 
         self.network = net_fn(**net_args)
@@ -353,13 +350,10 @@ class CategoricalActor(nn.Module):
             snrmap = obs[:, -self.snrmap_features:]
             embed = torch.cat([embed, snrmap], dim=-1)  # 直接shortcut，concat到送入两个branch之前的embedding上
         logit1, logit2 = self.branch1(embed), self.branch2(embed)
-        #logits = torch.stack([logit1, logit2], dim=1)
+        # logits = torch.stack([logit1, logit2], dim=1)
         prob1 = self.softmax(logit1) + self.eps
         prob1 = prob1 / prob1.sum(dim=-1, keepdim=True)
-        
+
         prob2 = self.softmax(logit2) + self.eps
         prob2 = prob2 / prob2.sum(dim=-1, keepdim=True)
-        return torch.cat([prob1,prob2],dim=-1)  # shape = (-1, act_dim1+act_dim2) 
-
-
-
+        return torch.cat([prob1, prob2], dim=-1)  # shape = (-1, act_dim1+act_dim2)
