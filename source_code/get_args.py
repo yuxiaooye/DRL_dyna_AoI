@@ -35,7 +35,7 @@ def parse_args():
     # tune env
     ## setting
     parser.add_argument('--fixed-range', action='store_false')  # 重要，sensing range现在固定了
-    parser.add_argument('--snr', type=float, default=200)
+    parser.add_argument('--collect_range', type=float, default=500)
     parser.add_argument('--dyna_level', type=str, default='2', help='指明读取不同难度的poi_QoS.npy')
     parser.add_argument('--init_energy', type=float, default=719280)
     parser.add_argument('--w_noise', type=float, default=-104)
@@ -76,7 +76,7 @@ def parse_args():
     env_args = {  # 这里环境类的参数抄昊宝
         "emergency_threshold": 100,
         "max_episode_step": input_args.max_episode_step,
-        "collect_range": input_args.snr,
+        "collect_range": input_args.collect_range,
         "initial_energy": input_args.init_energy,
         "user_data_amount": input_args.user_data_amount,
         "update_num": input_args.update_num,

@@ -70,7 +70,7 @@ def override(alg_args, run_args, input_args, env):
         alg_args.model_batch_size = 5  # 用于训练一次model的traj数量
         alg_args.max_ep_len = 5
         alg_args.rollout_length = 20 * input_args.n_thread
-        alg_args.test_length = 600  # 测试episode的最大步长
+          # 测试episode的最大步长
         alg_args.model_buffer_size = 10
         alg_args.n_model_update = 3
         alg_args.n_model_update_warmup = 3
@@ -95,7 +95,7 @@ def override(alg_args, run_args, input_args, env):
 
     # tune env
     ## setting
-    if input_args.snr != 200:
+    if input_args.snr != 500:
         run_args.name += f'_SNR={input_args.snr}'
     if input_args.dyna_level != '2':
         run_args.name += f'_DynaLevel={input_args.dyna_level}'

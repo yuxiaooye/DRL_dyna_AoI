@@ -75,7 +75,6 @@ class OnPolicyRunner:
         self.n_test = alg_args.n_test
         self.test_interval = alg_args.test_interval
         self.rollout_length = alg_args.rollout_length
-        self.test_length = alg_args.test_length
         self.use_stack_frame = alg_args.use_stack_frame
 
         # environment initialization
@@ -141,16 +140,13 @@ class OnPolicyRunner:
         """
         The environment should return sth like [n_agent, dim] or [batch_size, n_agent, dim] in either numpy or torch.
         """
-        length = self.test_length
         returns = []
         lengths = []
-        # episodes = []
         for i in trange(self.n_test, desc='test'):
-            # episode = []
             done, ep_ret, ep_len = False, np.zeros((1,)), 0  # ep_ret改为分threads存
             envs = self.envs_test
             envs.reset()
-            while not (done or (ep_len == length)):  # 测试时限定一个episode最大为length步
+            while not done:  # 测试时限定一个episode最大为length步
                 s = envs.get_obs_from_outside()
                 a = self.agent.act(s)  # shape = (-1, 3)
                 action1 = a['branch1'].sample()

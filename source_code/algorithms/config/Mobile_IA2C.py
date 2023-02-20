@@ -17,7 +17,6 @@ def getArgs(radius_v, radius_pi, env):
     alg_args.model_validate_interval = 10
     alg_args.test_interval = 20
     alg_args.rollout_length = 1500
-    alg_args.test_length = 1500
     alg_args.max_episode_len = 1500
     alg_args.model_based = False
     alg_args.load_pretrained_model = False

@@ -20,7 +20,7 @@ def getArgs(radius_v, radius_pi, env, input_args=None):
     alg_args.n_test = 1  # default=5, 意为每次test 5个episode
     alg_args.test_interval = 20
     alg_args.rollout_length = 600  # 也即PPO中的T_horizon，
-    alg_args.test_length = 600
+    
     alg_args.max_episode_len = 600
     alg_args.model_based = False
     alg_args.load_pretrained_model = False

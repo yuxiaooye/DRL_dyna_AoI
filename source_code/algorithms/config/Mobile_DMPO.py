@@ -16,7 +16,7 @@ def getArgs(radius_v, radius_pi, env, input_args=None):
     alg_args.model_validate_interval = 10
     alg_args.test_interval = 20
     alg_args.rollout_length = 600  # 也即PPO中的T_horizon
-    alg_args.test_length = 600
+    
     alg_args.max_episode_len = 600
     alg_args.model_based = True
     alg_args.load_pretrained_model = False
