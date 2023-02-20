@@ -72,6 +72,10 @@ class EnvMobile():
         self.action_space = spaces.MultiDiscrete([9, self.UPDATE_NUM])
 
         self.cell_num = input_args.map_size
+        
+        if self.input_args.algo=='ConvLSTM': self.cell_num = 20
+
+        
         self.cell_span_x = self.MAP_X / self.cell_num
         self.cell_span_y = self.MAP_Y / self.cell_num
 
