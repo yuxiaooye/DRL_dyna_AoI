@@ -1,0 +1,43 @@
+{
+    "acting" : {
+        "actor_envs" : 4,
+        "exploration" : "@json('exploration/per_actor_0.4_factor7.json')"
+    },
+    "model" : "@json('models/mlp_3x512_lstm128.json')",
+    "env" : "CrowdSim-v0",
+    "policy_args" : {
+        "cuda" : true,
+        "num_sampling_quantiles" : 64,
+        "dueling" : true
+    },
+    "training" : {
+        "type" : "iqn",
+        "args" : {
+            "gamma" : 0.95,
+            "vf_scale_epsilon" : null,
+            "mbatch_size" : 32,
+            "nstep_train" : 10,
+            "nstep_target" : 2,
+            "target_update_freq" : 6000,
+            "lr" : 1e-3,
+            "lr_anneal" : false,
+            "adam_epsilon" : 1e-5,
+            "double_q" : true,
+            "rnn_bootstrap" : true,
+            "clip_grad" : 40.0,
+            "total_steps" : 100000,
+            "warmup_steps" : 6000,
+            "history_mode" : {
+                "type" : "replay",
+                "args" : {
+                    "size" : 50000,
+                    "train_frequency" : 4
+                }
+            }
+        }
+    },
+    "env_args" : {
+        "wrappers" : "@json('env_wrappers/common_lstm.json')",
+        "max_episode_steps" : 120
+    }
+}

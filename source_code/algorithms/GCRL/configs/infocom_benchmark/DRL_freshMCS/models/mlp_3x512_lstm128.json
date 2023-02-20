@@ -1,0 +1,12 @@
+{
+    "_comment" : "A fully connected model with 23 hidden layers, each with 512 units and lstm 512",
+    "type" : "sequential",
+    "args" : {
+        "layer_configs": [
+            "@json('modules/fc512.json')",
+            "@json('modules/fc512.json')",
+            "@json('modules/fc512.json')",
+            "@json('modules/lstm512.json')"
+        ]
+    }
+}

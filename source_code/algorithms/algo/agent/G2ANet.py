@@ -25,9 +25,6 @@ class G2AEmbedNet(nn.Module):
 
         # Encoding
 
-
-
-
         self.encoding = nn.Linear(obs_dim, self.hidden_dim)  # 对所有agent的obs解码
 
         # Hard
@@ -36,7 +33,7 @@ class G2AEmbedNet(nn.Module):
         # 即对于batch_size条数据，输入每个agent与其他n_agents - 1个agents的hidden_state的连接
         self.hard_bi_GRU = nn.GRU(self.hidden_dim * 2, self.hidden_dim, bidirectional=True)
         # 对h_j进行分析，得到agent j对于agent i的权重，输出两维，经过gumble_softmax后取其中一维即可，如果是0则不考虑agent j，如果是1则考虑
-        self.hard_encoding = nn.Linear(self.hidden_dim * 2, 2)  # 乘2因为是双向GRU，hidden_state维度为2 * hidden_dim
+        self.hard_encoding = nn.Linear(self.hidden_dim * 2, 2)  # 输入的乘2因为是双向GRU，hidden_state维度为2 * hidden_dim
 
         # Soft
         self.q = nn.Linear(self.hidden_dim, self.attention_dim, bias=False)
@@ -76,17 +73,16 @@ class G2AEmbedNet(nn.Module):
             input_hard = torch.stack(input_hard, dim=-2)
             # 最终得到维度(n_agents - 1, batch_size * n_agents, hidden_dim * 2)，可以输入了
             input_hard = input_hard.view(self.n_agent - 1, -1, self.hidden_dim * 2)
-
+            '''过bi_GRU网络'''
             h_hard = torch.zeros((2 * 1, size, self.hidden_dim)).to(self.device)  # 因为是双向GRU，每个GRU只有一层，所以第一维是2 * 1
             h_hard, _ = self.hard_bi_GRU(input_hard, h_hard)  # (n_agents - 1, batch_size * n_agents, hidden_dim * 2)
             h_hard = h_hard.permute(1, 0, 2)  # (batch_size * n_agents, n_agents - 1, hidden_dim * 2)
             h_hard = h_hard.reshape(-1, self.hidden_dim * 2)  # (batch_size * n_agents * (n_agents - 1), hidden_dim * 2)
 
-            hard_weights = self.hard_encoding(h_hard)  # 将(6, 128)映射为(6, 2)  # TODO 留
+            hard_weights = self.hard_encoding(h_hard)  # 将(3*2, 128)映射为(3*2, 2)
             hard_weights = f.gumbel_softmax(hard_weights, tau=self.tau)
             # print(hard_weights)
-            # TODO 明天再check一下这里
-            hard_weights = hard_weights[:self.n_agent, :].view(-1, self.n_agent, 1, self.n_agent - 1)
+            hard_weights = hard_weights[:, 1].view(-1, self.n_agent, 1, self.n_agent - 1)
             hard_weights = hard_weights.permute(1, 0, 2, 3)
 
         else:

@@ -66,6 +66,7 @@ class Config(object):
             "user_data_amount": 1,  # 调环境：调高任务难度
 
             "collect_range": 500,
+            "w_noise": -104,
             "RATE_THRESHOLD": 5,  # 关键 Mbps
             "AoI_THRESHOLD": 100,  # 关键
             "bonus_reward_ratio": 0.0,  # 这个ratio就算要设，也必须比penalty ratio小很多，因为他俩本身的尺度不一样

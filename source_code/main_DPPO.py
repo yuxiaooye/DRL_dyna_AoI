@@ -119,6 +119,10 @@ def override(alg_args, run_args, input_args, env):
         run_args.name += f'_Users={input_args.poi_num}'
     if not input_args.hao02191630:
         run_args.name += f'_Nothao02191630'
+    if input_args.w_noise != -104:
+        run_args.name += f'_NOISE={input_args.w_noise}'
+    if input_args.agent_field != 750:
+        run_args.name += f'_FIELD={input_args.agent_field}'
     ## MDP
     if input_args.max_episode_step != 120:
         run_args.name += f'_MaxTs={input_args.max_episode_step}'

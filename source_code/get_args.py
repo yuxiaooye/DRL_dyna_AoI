@@ -38,7 +38,8 @@ def parse_args():
     parser.add_argument('--snr', type=float, default=200)
     parser.add_argument('--dyna_level', type=str, default='2', help='指明读取不同难度的poi_QoS.npy')
     parser.add_argument('--init_energy', type=float, default=719280)
-    parser.add_argument('--user_data_amount', type=int, default=1)
+    parser.add_argument('--w_noise', type=float, default=-104)
+    parser.add_argument('--user_data_amount', type=float, default=1)
     parser.add_argument('--update_num', type=int, default=15)
     parser.add_argument('--uav_num', type=int, default=3)
     parser.add_argument('--fixed-col-time', action='store_false')
@@ -54,6 +55,7 @@ def parse_args():
     parser.add_argument('--use_snrmap', action='store_true')  # shrotcut is always used
     parser.add_argument('--aVPS', type=float, default=0.2)
     parser.add_argument('--tVPS', type=float, default=0.2)
+    parser.add_argument('--agent_field', type=float, default=750)
     input_args = parser.parse_args()
 
     # if input_args.multi_mlp:
@@ -85,6 +87,8 @@ def parse_args():
         "aoi_vio_penalty_scale": input_args.aVPS,
         "tx_vio_penalty_scale": input_args.tVPS,
         "hao02191630": input_args.hao02191630,
+        "w_noise": input_args.w_noise,
+        "agent_field": input_args.agent_field,
     }
     if input_args.poi_num is not None:
         env_args["poi_num"] = input_args.poi_num

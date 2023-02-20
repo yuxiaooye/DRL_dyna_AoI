@@ -43,6 +43,7 @@ class EnvMobile():
         self.TOTAL_TIME = self.MAX_EPISODE_STEP * self.TIME_SLOT
         self.UAV_SPEED = self.config("uav_speed")
         self.POI_VISIBLE_NUM = self.config("poi_visible_num")
+        self.W_NOISE = self.config("w_noise")
 
         self.UPDATE_NUM = self.config("update_num")
         self.COLLECT_RANGE = self.config("collect_range")
@@ -105,6 +106,10 @@ class EnvMobile():
         # self.remain_data = [0 for _ in range(self.POI_NUM)]
         self.poi_aoi = [0 for _ in range(self.POI_NUM)]
         # self.poi_aoi_area = [0 for _ in range(self.POI_NUM)]
+
+        self.abilities = []
+        self.tx_vio_num = 0  # debug
+        self.tx_satis_num = 0  # debug
 
         self.uav_trace = [[] for i in range(self.UAV_NUM)]
         self.uav_state = [[] for i in range(self.UAV_NUM)]
@@ -214,8 +219,12 @@ class EnvMobile():
 
         uav_rewards = np.zeros(self.UAV_NUM)
         for poi_id, sum_rate in enumerate(sum_rates):
-            if sum_rate < self.RATE_THRESHOLD: continue  # 不满足阈值
+            if sum_rate < self.RATE_THRESHOLD:
+                if sum_rate > 0: self.tx_vio_num += 1  # debug
+                continue  # 不满足阈值
+            self.tx_satis_num += 1  # debug
             ability = int(collect_time / (self.USER_DATA_AMOUNT / sum_rate))  # int向下取整没问题
+            self.abilities.append(ability)  # debug
             real = min(self.poi_aoi[poi_id], ability)
             before = self.poi_aoi[poi_id]
             self.poi_aoi[poi_id] -= real  # aoi reset
@@ -227,12 +236,12 @@ class EnvMobile():
                     if poi_id == pid:
                         # data coll * aoi vio * credit assignment
                         # r = (before - self.poi_aoi[poi_id]) * (before / self.MAX_EPISODE_STEP) * (rate / sum_rate)
-                        r = (before / self.MAX_EPISODE_STEP) * (rate / sum_rate)
+                        r = (real / self.MAX_EPISODE_STEP) * (rate / sum_rate)
                         uav_rewards[uav_id] += r
                         rate_contribute_to_that_poi[uav_id] = rate
 
             self.good_reward_list.extend(uav_rewards)
-            if self.debug: print(uav_rewards)
+            # if self.debug: print(uav_rewards)
 
 
         if self.KNN_COEFFCICENT > -1:
@@ -279,6 +288,9 @@ class EnvMobile():
         '''step3. episode结束时的后处理'''
         info = {}
         if done:
+            if self.debug:
+                print('达到txth的user的平均收集能力', np.mean(self.abilities))
+                print('选中的user中未达到txtx的user比例：', self.tx_vio_num/(self.tx_vio_num+self.tx_satis_num))
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", category=RuntimeWarning)
                 info = self.summary_info(info)
@@ -424,8 +436,7 @@ class EnvMobile():
         # path_loss2 = (1 + alpha * math.exp(-beta * (theta - alpha)))*(28.0+22*math.log10(distance)+20*math.log10(fc))+(1-(1 + alpha * math.exp(-beta * (theta - alpha))))*(-17.5+(46-7*math.log10(100))*math.log10(distance)+20*math.log10(4*math.pi*fc/3))
         # print(path_loss,path_loss2)
         w_tx = 20
-        w_noise = -104
-        w_s_t = w_tx - path_loss - w_noise
+        w_s_t = w_tx - path_loss - self.W_NOISE
         w_w_s_t = math.pow(10, (w_s_t - 30) / 10)
         bandwidth = 20e6
         data_rate = bandwidth * math.log2(1 + w_w_s_t)
