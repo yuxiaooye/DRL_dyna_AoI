@@ -13,16 +13,15 @@ import movingpandas as mpd
 from folium.plugins import TimestampedGeoJson
 import argparse
 import warnings
-warnings.simplefilter(action='ignore', category=FutureWarning)  # 不显示pandas的FutureWarning
 
+warnings.simplefilter(action='ignore', category=FutureWarning)  # 不显示pandas的FutureWarning
 
 assert os.getcwd().endswith('source_code'), '请将工作路径设为source_code，否则无法正确导入包'
 sys.path.append(os.getcwd())
 from env_configs.roadmap_env.roadmap_utils import *
 
 
-def render_HTML(output_dir, tag='train', draw_snrth=False, traj_filename='eps_best.npz'):
-
+def render_HTML(output_dir, tag='train', draw_collect_range=False, debug=False):
     '''从params.json中拿到训练时参数'''
     json_file = osp.join(output_dir, 'params.json')
     with open(json_file, 'r') as f:
@@ -38,11 +37,11 @@ def render_HTML(output_dir, tag='train', draw_snrth=False, traj_filename='eps_be
     rm = Roadmap(dataset, env_config)
 
     '''从output_dir中拿到轨迹'''
-    traj_file = osp.join(output_dir, f'{tag}_saved_trajs/{traj_filename}')
-    trajs = np.load(traj_file)
-    # poi_trajs, uav_trajs = list(trajs['arr_0']), list(trajs['arr_1'])
+    traj_file = osp.join(output_dir, f'{tag}_saved_trajs/eps_best.npz')
+    aoi_file = osp.join(output_dir, f'{tag}_saved_trajs/eps_best_aoi.npz')
+    serve_file = osp.join(output_dir, f'{tag}_saved_trajs/eps_best_serve.npz')
+    uav_trajs, aois, serves = list(np.load(traj_file)['arr_0']), list(np.load(aoi_file)['arr_0']), list(np.load(serve_file)['arr_0'])
     poi_trajs = rm.init_pois(max_episode_step)
-    uav_trajs = list(trajs['arr_0'])
 
     map = folium.Map(location=[(rm.lower_left[1] + rm.upper_right[1]) / 2, (rm.lower_left[0] + rm.upper_right[0]) / 2],
                      tiles="cartodbpositron", zoom_start=15, max_zoom=24)
@@ -74,8 +73,8 @@ def render_HTML(output_dir, tag='train', draw_snrth=False, traj_filename='eps_be
             poi_trajs[id][ts][:2] = rm.pygamexy2lonlat(*poi_trajs[id][ts][:2])
 
     uv_color_dict = {
-        'uav1': '#%02X%02X%02X' % (255, 0, 0),  # red
-        'uav2': '#%02X%02X%02X' % (3, 204, 51),  # green
+        'uav1': '#%02X%02X%02X' % (95, 158, 160),  #
+        'uav2': '#%02X%02X%02X' % (130, 43, 226),  #
         'uav3': '#%02X%02X%02X' % (0, 0, 255),  # blue
         'uav4': '#%02X%02X%02X' % (0, 0, 255),  # blue
         'uav5': '#%02X%02X%02X' % (0, 0, 255),  # blue
@@ -129,10 +128,10 @@ def render_HTML(output_dir, tag='train', draw_snrth=False, traj_filename='eps_be
 
     for index, traj in enumerate(trajs.trajectories):
         name, color = get_name_color_by_index(index)
-        if index<uav_num:
+        if index < uav_num:
             uav_features = uav_traj_to_timestamped_geojson(index, traj, rm, uav_num, color,
-                                                input_args, env_config, draw_snrth=False) 
-            TimestampedGeoJson(  # 这里解注释了一个try except
+                                                           input_args, env_config, draw_collect_range=draw_collect_range)
+            TimestampedGeoJson(
                 {
                     "type": "FeatureCollection",
                     "features": uav_features,
@@ -145,8 +144,8 @@ def render_HTML(output_dir, tag='train', draw_snrth=False, traj_filename='eps_be
             ).add_to(map)
         else:
             features = traj_to_timestamped_geojson(index, traj, rm, uav_num, color,
-                                                input_args, env_config, draw_snrth=False)  # True
-            TimestampedGeoJson(  # 这里解注释了一个try except
+                                                   input_args, env_config, aois, serves)
+            TimestampedGeoJson(
                 {
                     "type": "FeatureCollection",
                     "features": features,
@@ -172,23 +171,26 @@ def render_HTML(output_dir, tag='train', draw_snrth=False, traj_filename='eps_be
     folium.LayerControl().add_to(map)
 
     # save
-    save_file = os.path.join(output_dir, f'vis_{tag}.html')
+    if debug:
+        save_file = os.path.join(output_dir, f'vis_{tag}_debug.html')
+    else:
+        save_file = os.path.join(output_dir, f'vis_{tag}.html')
     map.get_root().save(save_file)
 
     print('OK!')
-
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--output_dir")
     parser.add_argument("--tag", type=str, default='train', choices=['train', 'test'], help='load trajs from train or test')
-    parser.add_argument("--draw-snrth", action='store_true')
+    parser.add_argument("--draw_collect_range", action='store_true')
+    parser.add_argument("--debug", action='store_true')
     args = parser.parse_args()
 
     render_HTML(
         args.output_dir,
-        args.tag,
-        args.draw_snrth,
+        tag=args.tag,
+        draw_collect_range=args.draw_collect_range,
+        debug=args.debug
     )
-

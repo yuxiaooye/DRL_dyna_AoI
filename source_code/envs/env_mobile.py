@@ -111,6 +111,7 @@ class EnvMobile():
         self.poi_aoi = [0 for _ in range(self.POI_NUM)]
         # self.poi_aoi_area = [0 for _ in range(self.POI_NUM)]
 
+
         self.abilities = []
         self.tx_vio_num = 0  # debug
         self.tx_satis_num = 0  # debug
@@ -121,7 +122,8 @@ class EnvMobile():
 
         self.dead_uav_list = [False for i in range(self.UAV_NUM)]
 
-        self.poi_history = []  # episode结束后，长度为121
+        self.poi_history = [{'pos': None, 'aoi': [0 for _ in range(self.POI_NUM)]}]  # episode结束后，长度为121
+        self.serves = np.zeros((self.MAX_EPISODE_STEP+1, self.POI_NUM))
         self.aoi_vio_ratio_list = []  # 当前时间步有多大比例的PoI违反了aoi阈值
         self.tx_satis_ratio_list = []  # 当前时间步有多大比例的被服务aoi满足了data rate阈值
         # 监视下面几个reward乘上ratio之前的尺度
@@ -227,6 +229,7 @@ class EnvMobile():
                 if sum_rate > 0: self.tx_vio_num += 1  # debug
                 continue  # 不满足阈值
             self.tx_satis_num += 1  # debug
+            self.serves[self.step_count][poi_id] = 1
             ability = int(collect_time / (self.USER_DATA_AMOUNT / sum_rate))  # int向下取整没问题
             self.abilities.append(ability)  # debug
             real = min(self.poi_aoi[poi_id], ability)
@@ -611,13 +614,15 @@ class EnvMobile():
         plt.hist(data, bins=20, rwidth=0.8)
         plt.show()
 
-    def save_trajs_2(self, best_trajs, total_steps=1,
+    def save_trajs_2(self, best_trajs, poi_aoi_history, serves, total_steps=1,
                      phase='train', is_newbest=False):
 
         postfix = 'best' if is_newbest else str(total_steps)
         save_traj_dir = osp.join(self.input_args.output_dir, f'{phase}_saved_trajs')
         if not osp.exists(save_traj_dir): os.makedirs(save_traj_dir)
         np.savez(osp.join(save_traj_dir, f'eps_{postfix}.npz'), best_trajs)
+        np.savez(osp.join(save_traj_dir, f'eps_{postfix}_aoi.npz'), poi_aoi_history)
+        np.savez(osp.join(save_traj_dir, f'eps_{postfix}_serve.npz'), serves)
 
         if is_newbest:
             from tools.post.vis import render_HTML

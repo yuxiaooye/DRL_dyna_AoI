@@ -21,7 +21,7 @@ sys.path.append(os.getcwd())
 from env_configs.roadmap_env.roadmap_utils import *
 
 
-def render_HTML(output_dir, tag='train', draw_snrth=False, traj_filename='eps_best.npz'):
+def render_HTML(output_dir, tag='train', draw_collect_range=False, traj_filename='eps_best.npz'):
 
     '''从params.json中拿到训练时参数'''
     json_file = osp.join(output_dir, 'params.json')
@@ -136,7 +136,7 @@ def render_HTML(output_dir, tag='train', draw_snrth=False, traj_filename='eps_be
         if index<uav_num:
             continue  # TODO DASAP
             uav_features = uav_traj_to_timestamped_geojson(index, traj, rm, uav_num, color,
-                                                input_args, env_config, draw_snrth=False)
+                                                input_args, env_config, draw_collect_range=False)
             TimestampedGeoJson(  # 这里解注释了一个try except
                 {
                     "type": "FeatureCollection",
@@ -150,7 +150,7 @@ def render_HTML(output_dir, tag='train', draw_snrth=False, traj_filename='eps_be
             ).add_to(map)
         else:
             features = traj_to_timestamped_geojson(index, traj, rm, uav_num, color,
-                                                input_args, env_config, draw_snrth=False)  # True
+                                                input_args, env_config, draw_collect_range=False)  # True
             TimestampedGeoJson(  # 这里解注释了一个try except
                 {
                     "type": "FeatureCollection",
@@ -195,6 +195,6 @@ if __name__ == '__main__':
     render_HTML(
         args.output_dir,
         args.tag,
-        args.draw_snrth,
+        args.draw_collect_range,
     )
 

@@ -164,10 +164,12 @@ class OnPolicyRunner:
                 max_id = ep_ret.argmax()
                 self.best_test_episode_reward = ep_ret.max()
                 best_eval_trajs = self.envs_test.get_saved_trajs()
+                poi_aoi_history = self.envs_test.get_poi_aoi_history()
+                serves = self.envs_learn.get_serves()
                 write_output(envs_info[max_id], self.run_args.output_dir, tag='test')
                 if not self.input_args.test:
                     self.dummy_env.save_trajs_2(
-                        best_eval_trajs[max_id], phase='test', is_newbest=True)
+                        best_eval_trajs[max_id], poi_aoi_history[max_id], serves[max_id], phase='test', is_newbest=True)
             returns += [ep_ret.sum()]
             lengths += [ep_len]
         returns = np.stack(returns, axis=0)
@@ -223,9 +225,11 @@ class OnPolicyRunner:
                     self.best_episode_reward = ep_r.max()
                     self.agent.save_nets(dir_name=self.run_args.output_dir, is_newbest=True)
                     best_train_trajs = self.envs_learn.get_saved_trajs()
+                    poi_aoi_history = self.envs_learn.get_poi_aoi_history()
+                    serves = self.envs_learn.get_serves()
                     write_output(env_info[max_id], self.run_args.output_dir)
                     self.dummy_env.save_trajs_2(
-                        best_train_trajs[max_id], phase='train', is_newbest=True)
+                        best_train_trajs[max_id], poi_aoi_history[max_id], serves[max_id], phase='train', is_newbest=True)
 
                 self.logger.log(QoI=sum(d['QoI'] for d in env_info) / len(env_info),
                                 episodic_aoi=sum(d['episodic_aoi'] for d in env_info) / len(env_info),

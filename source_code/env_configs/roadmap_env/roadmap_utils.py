@@ -5,8 +5,8 @@ import os.path as osp
 import pandas as pd
 import numpy as np
 
-
 project_dir = osp.dirname(osp.dirname(osp.dirname(__file__)))
+
 
 class Roadmap():
 
@@ -20,13 +20,12 @@ class Roadmap():
         self.lower_left = get_map_props()[dataset]['lower_left']
         self.upper_right = get_map_props()[dataset]['upper_right']
 
-
         try:  # movingpandas
             from movingpandas.geometry_utils import measure_distance_geodesic
             self.max_dis_y = measure_distance_geodesic(Point(self.lower_left[0], self.lower_left[1]),
-                                                  Point(self.upper_right[0], self.lower_left[1]))
+                                                       Point(self.upper_right[0], self.lower_left[1]))
             self.max_dis_x = measure_distance_geodesic(Point(self.lower_left[0], self.lower_left[1]),
-                                                  Point(self.lower_left[0], self.upper_right[1]))
+                                                       Point(self.lower_left[0], self.upper_right[1]))
         except:
             # hardcode
             if dataset == 'purdue':
@@ -38,7 +37,8 @@ class Roadmap():
             elif dataset == 'KAIST':
                 self.max_dis_y = 2100.207579392558
                 self.max_dis_x = 2174.930950809533
-            else: raise NotImplementedError
+            else:
+                raise NotImplementedError
 
     def init_pois(self, max_episode_step=120):
         '''读df并处理表头'''
@@ -53,7 +53,6 @@ class Roadmap():
         assert poi_df.columns.to_list()[-2:] == ['px', 'py']
         '''将df转换为np.array'''
         poi_mat = np.expand_dims(poi_df[poi_df['id'] == 0].values[:, -2:], axis=0)  # idt
-
 
         for id in range(1, poi_num):
             subDf = poi_df[poi_df['id'] == id]
@@ -92,9 +91,9 @@ def get_map_props():
     }
     return map_props
 
-def traj_to_timestamped_geojson(index, trajectory, rm, uav_num, color,
-                                input_args, env_config, poi_QoS=None, draw_snrth=False):
 
+def traj_to_timestamped_geojson(index, trajectory, rm, uav_num, color,
+                                input_args, env_config, aois=None, serves=None):
     point_gdf = trajectory.df.copy()
     features = []
     # for Point in GeoJSON type
@@ -105,144 +104,131 @@ def traj_to_timestamped_geojson(index, trajectory, rm, uav_num, color,
             radius, opacity = 5, 1
         else:  # human
             radius, opacity = 2, 1
-            # if input_args['fixed_range']:  # case1 fixed QoS
-            #     radius, opacity = 2, 1
-            # else:  # case2 dyna QoS
-            #     # QoS = poi_QoS[index-uav_num][min(i, len(poi_QoS[1])-1)]  # 防止数组越界
-            #     # radius, opacity = (400 - QoS)/100 + 1, op['human']  # 将QoS的100~400映射到4~1
-            #     radius, opacity = 2, 1
+
+        if aois is not None:
+            radius = aois[i][index-uav_num] / 12 + 3  # aoi越大radius越大 1~120映射到3~13
+        if serves is not None:
+            if serves[i][index-uav_num]:
+                color = "red"
+            else:
+                color = "black"
 
         # for Point in GeoJSON type
         cur_coord = [row["geometry"].xy[0][0], row["geometry"].xy[1][0]]
 
         feature1 = {
-                "type": "Feature",
-                "geometry": {
-                    "type": "Point",
-                    "coordinates": cur_coord,
+            "type": "Feature",
+            "geometry": {
+                "type": "Point",
+                "coordinates": cur_coord,
+            },
+            "properties": {
+                "times": [current_time.isoformat()],
+                "icon": 'circle',  # point
+                "iconstyle": {
+                    'fillColor': color,
+                    'fillOpacity': opacity,
+                    'stroke': 'true',
+                    'radius': radius,
+                    'weight': 1,
                 },
-                "properties": {
-                    "times": [current_time.isoformat()],
-                    "icon": 'circle',  # point
-                    "iconstyle": {
-                        'fillColor': color,
-                        'fillOpacity': opacity,
-                        'stroke': 'true',
-                        'radius': radius,
-                        'weight': 1,
-                    },
-                    "style": {  # 外边框的属性
-                        "color": color,
-                        "opacity": opacity
-                    },
-                    "code": 11,
+                "style": {  # 外边框的属性
+                    "color": color,
+                    "opacity": opacity
                 },
-            }
+                "code": 11,
+                'popup': f"User{index-uav_num}\n"
+                         f"AoI={aois[i][index-uav_num]}",
+            },
+        }
         features.append(feature1)
 
-        # 每个时间步都画SNRth的话图上太乱了，隔五步画一次
-        # 人没怎么动还一直画太黑了，仅当人移动超过一定距离再画新的
-        def is_draw(cur_coord, last_vis_coord):
-            pos1 = rm.lonlat2pygamexy(*cur_coord)
-            pos2 = rm.lonlat2pygamexy(*last_vis_coord)
-            dis = np.linalg.norm(np.array(pos1)-np.array(pos2), ord=2)
-            return dis > 500
-        if draw_snrth and index > uav_num and \
-                i % 5 == 0 and is_draw(cur_coord, last_vis_coord):
-            feature2 = {
-                    "type": "Feature",
-                    "geometry": {
-                        "type": "Point",
-                        "coordinates": cur_coord,
-                        # "coordinates": [-78.6988, 35.7651],  # debug 左下角坐标
-                    },
-                    "properties": {
-                        "times": [current_time.isoformat()],
-                        "icon": 'circle',  # point
-                        "iconstyle": {   #
-                            'fillColor': color,
-                            'fillOpacity': 0.1,  # 这个改成1就不透明~
-                            'stroke': 'true',
-                            'radius': poi_QoS[index-uav_num][min(i, poi_QoS.shape[1]-1)] * 840 / 3255,  # 在zoom等级为15时，840等价于3255m
-                            'weight': 1,
-                        },
-                        "style": {  # 外边框的属性
-                            "color": color,
-                            "opacity": 0.0,
-                        },
-                        "code": 11,
-                    },
-                }
-            features.append(feature2)
-            last_vis_coord = cur_coord
+
     return features
 
 
-
 def uav_traj_to_timestamped_geojson(index, trajectory, rm, uav_num, color,
-                                input_args, env_config, poi_QoS=None, draw_snrth=False):
-
+                                    input_args, env_config, poi_QoS=None, draw_collect_range=False):
     point_gdf = trajectory.df.copy()
     features = []
     # for Point in GeoJSON type
     last_vis_coord = rm.lower_left
-    last_x,last_y,last_time = None,None,None
+    last_x, last_y, last_time = None, None, None
     for i, (current_time, row) in enumerate(point_gdf.iterrows()):  # 遍历一个人的不同时间步
-        
+
         if last_x is None:
             last_x = row["geometry"].xy[0][0]
             last_y = row["geometry"].xy[1][0]
             last_time = current_time.isoformat()
         new_x = row["geometry"].xy[0][0]
         new_y = row["geometry"].xy[1][0]
-        
+
         if index < uav_num:  # UAV
             radius, opacity = 5, 1
         else:  # human
             radius, opacity = 2, 1
 
         # for Point in GeoJSON type
-        cur_coord = [[last_x, last_y],[new_x, new_y]]
-        
-   
-        
+        cur_coord = [[last_x, last_y], [new_x, new_y]]
+
         feature1 = {
+            "type": "Feature",
+            "geometry": {
+                "type": "LineString",
+                "coordinates": cur_coord,
+            },
+            "properties": {
+                "times": [last_time, current_time.isoformat()],
+                "icon": 'circle',  # point
+                "iconstyle": {
+                    'fillColor': color,
+                    'fillOpacity': opacity,
+                    'stroke': 'true',
+                    'radius': radius,
+                    'weight': 1,
+                },
+                "style": {  # 外边框的属性
+                    "color": color,
+                    "opacity": opacity
+                },
+                "code": 11,
+            },
+        }
+        features.append(feature1)
+
+        collect_range = env_config['collect_range']
+
+        if draw_collect_range:
+            feature2 = {
                 "type": "Feature",
                 "geometry": {
-                    "type": "LineString",
-                    "coordinates": cur_coord,
+                    "type": "Point",
+                    "coordinates": cur_coord[1],
                 },
                 "properties": {
-                    "times": [last_time,current_time.isoformat()],
+                    "times": [current_time.isoformat()],
                     "icon": 'circle',  # point
-                    "iconstyle": {
+                    "iconstyle": {  #
                         'fillColor': color,
-                        'fillOpacity': opacity,
+                        'fillOpacity': 0.1,  # 这个改成1就不透明~
                         'stroke': 'true',
-                        'radius': radius,
+                        'radius': collect_range * 840 / 3255,  # 在zoom等级为15时，840等价于3255m
                         'weight': 1,
                     },
                     "style": {  # 外边框的属性
                         "color": color,
-                        "opacity": opacity
+                        "opacity": 0.0,
                     },
                     "code": 11,
                 },
             }
-        features.append(feature1)
-        
+            features.append(feature2)
+
         last_x = new_x
-        last_y = new_y 
+        last_y = new_y
         last_time = current_time.isoformat()
 
-        # 每个时间步都画SNRth的话图上太乱了，隔五步画一次
-        # 人没怎么动还一直画太黑了，仅当人移动超过一定距离再画新的
-        def is_draw(cur_coord, last_vis_coord):
-            pos1 = rm.lonlat2pygamexy(*cur_coord)
-            pos2 = rm.lonlat2pygamexy(*last_vis_coord)
-            dis = np.linalg.norm(np.array(pos1)-np.array(pos2), ord=2)
-            return dis > 500
-     
+
     return features
 
 
@@ -250,13 +236,14 @@ def uav_traj_to_timestamped_geojson(index, trajectory, rm, uav_num, color,
 def folium_draw_circle(map, pos, color, radius, weight):  #
     folium.vector_layers.Circle(
         location=pos,  #
-        radius=radius,  #  m
+        radius=radius,  # m
         color=color,  #
         # fill=True,  #
         # fill_color='#%02X%02X%02X' % (0, 0, 0),  #
         # fillOpacity=1,  # Fill opacity
         weight=weight  #
     ).add_to(map)
+
 
 def create_circle(feature):
     return {
@@ -314,5 +301,3 @@ def get_border(ur, lf):
     geo_json["features"].append(grid_feature)
 
     return geo_json
-
-

@@ -197,7 +197,13 @@ def worker(remote, parent_remote, env_fn_wrapper):
             shared_obs_space = 0
             remote.send((env.observation_space, shared_obs_space, env.action_space))
         elif cmd == 'get_saved_trajs':
-            remote.send((env.uav_trace))
+            remote.send(env.uav_trace)
+        elif cmd == 'get_poi_aoi_history':
+            remote.send(
+                [item['aoi'] for item in env.poi_history]
+            )
+        elif cmd == 'get_serves':
+            remote.send(env.serves)
         elif cmd == 'get_obs_from_outside':
             remote.send(env.get_obs_from_outside())
         else:
@@ -312,6 +318,18 @@ class SubprocVecEnv(ShareVecEnv):
     def get_saved_trajs(self):
         for remote in self.remotes:
             remote.send(('get_saved_trajs', None))
+        results = [remote.recv() for remote in self.remotes]
+        return np.stack(results)
+
+    def get_poi_aoi_history(self):
+        for remote in self.remotes:
+            remote.send(('get_poi_aoi_history', None))
+        results = [remote.recv() for remote in self.remotes]
+        return np.stack(results)
+
+    def get_serves(self):
+        for remote in self.remotes:
+            remote.send(('get_serves', None))
         results = [remote.recv() for remote in self.remotes]
         return np.stack(results)
 
