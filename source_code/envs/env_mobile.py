@@ -227,7 +227,7 @@ class EnvMobile():
                     if poi_id == pid:
                         # data coll * aoi vio * credit assignment
                         # r = (before - self.poi_aoi[poi_id]) * (before / self.MAX_EPISODE_STEP) * (rate / sum_rate)
-                        r = (before / self.MAX_EPISODE_STEP) * (rate / sum_rate)
+                        r = (real / self.MAX_EPISODE_STEP) * (rate / sum_rate)
                         uav_rewards[uav_id] += r
                         rate_contribute_to_that_poi[uav_id] = rate
 
