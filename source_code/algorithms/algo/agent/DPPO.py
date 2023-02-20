@@ -85,6 +85,9 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
             return s
         if self.input_args.algo == 'G2ANet2':
             return self.g2a_embed_net(s)
+        if self.input_args.algo =='ConvLSTM':
+            return self.get_prediction_state(s)
+        
         if self.input_args.algo == 'G2ANet':  # 拿到hard_att的邻居图后，根据邻居图对obs取并集
             hard_atts = self.g2a_embed_hard_net(s)
             hard_atts = hard_atts.squeeze(-2)  # shape = (agent, n_thread, agent-1)
@@ -106,7 +109,7 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
         return s
 
     def s_for_agent(self, s, i):
-        if self.input_args.algo in ('G2ANet2', 'IPPO'):
+        if self.input_args.algo in ('G2ANet2', 'IPPO','ConvLSTM'):
             return s[:, i, :]
         return s[i]
 

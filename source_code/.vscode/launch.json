@@ -13,7 +13,8 @@
             "justMyCode": true,
             "args":[
                 "--debug"
-                "--algo","G2ANet"
+                "--algo","ConvLSTM"
+                "--use_snrmap"
             ]
         }
     ]

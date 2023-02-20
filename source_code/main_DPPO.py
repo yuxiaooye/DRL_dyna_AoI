@@ -43,7 +43,7 @@ def getRunArgs(input_args):
 def getAlgArgs(run_args, input_args, env):
     assert input_args.env.startswith('Mobile')
     assert input_args.algo in ['DPPO', 'CPPO', 'IPPO', 'DMPO',
-                               'IC3Net', 'IA2C', 'G2ANet', 'G2ANe2']
+                               'IC3Net', 'IA2C', 'G2ANet', 'G2ANe2','ConvLSTM']
     filename = input_args.algo
     if filename == 'G2ANet2':
         filename = 'G2ANet'
@@ -60,6 +60,9 @@ def override(alg_args, run_args, input_args, env):
     if input_args.use_snrmap:
         # snr features数量， 直接shortcut到策略前一层，0代表不使用snrmap
         alg_args.agent_args.pi_args.snrmap_features = env.cell_num * env.cell_num
+        
+        if input_args.algo=='ConvLSTM':
+            alg_args.agent_args.pi_args.snrmap_features = 81
     else:
         alg_args.agent_args.pi_args.snrmap_features = 0
 
@@ -202,6 +205,8 @@ elif input_args.algo == 'G2ANet2':
     from algorithms.algo.agent.G2ANet import G2ANetHardSoftAgent as agent_fn
 elif input_args.algo == 'IPPO':
     from algorithms.algo.agent.IPPO import IPPOAgent as agent_fn
+elif input_args.algo =='ConvLSTM':
+    from algorithms.algo.agent.ConvLSTM import ConvLSTMAgent as agent_fn
 
 if input_args.env == 'Mobile':
     from envs.env_mobile import EnvMobile

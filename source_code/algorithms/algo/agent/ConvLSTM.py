@@ -7,6 +7,15 @@ from algorithms.algo.agent.DPPO import DPPOAgent
 from algorithms.models import MLP, CategoricalActor
 from torch.optim import Adam
 
+
+def init(module, weight_init, gain=1):
+    weight_init(module.weight, gain=gain)
+    if module.bias is not None:
+        nn.init.constant_(module.bias, 0)
+    return module
+
+
+
 def get_controller_init_hidden(batch_size, hidden_channels, hidden_size, device):
     init_hidden_states = []
     for hidden_channel in hidden_channels:
@@ -68,7 +77,7 @@ class ConvLSTMCell(nn.Module):
 
     def forward(self, input_tensor, cur_state):
         h_cur, c_cur = cur_state
-        combined = torch.cat([input_tensor, h_cur], dim=1)  # peep_hole
+        combined = torch.cat([input_tensor, h_cur], dim=1)  # peep_hole 1,16,4,4   1,32,5,5
 
         combined_conv = self.conv(combined)
 
@@ -151,8 +160,6 @@ class PredictiveModel(nn.Module):
         self.cnn_kernel_size = cnn_kernel_size
         self.rnn_kernel_size = rnn_kernel_size
         self.device = device
-        self.input_len = input_len
-        self.seq_len = seq_len
 
         self.cnn_padding = int((self.cnn_kernel_size - 1) / 2)
         self.rnn_padding = int((self.rnn_kernel_size - 1) / 2)
@@ -166,8 +173,8 @@ class PredictiveModel(nn.Module):
         # 论文中的Φ
         self.cnn_layer = nn.Sequential(
             init_(nn.Conv2d(
-                in_channels=6,
-                out_channels=32,
+                in_channels=1,
+                out_channels=16,
                 kernel_size=self.cnn_kernel_size,
                 stride=2,
             )),
@@ -175,43 +182,34 @@ class PredictiveModel(nn.Module):
             # nn.Dropout(0.5),
 
             init_(nn.Conv2d(
-                in_channels=32,
-                out_channels=64,
+                in_channels=16,
+                out_channels=16,
                 kernel_size=self.cnn_kernel_size,
-                stride=1,
+                stride=2,
             )),
             nn.ReLU(),
         )
 
-        self.hidden_size = (14, 14)
-        self.rnn_layers = ConvLSTMLayers(input_channel=64, hidden_channels=self.hidden_channels,
+        self.hidden_size = (4, 4)
+        self.rnn_layers = ConvLSTMLayers(input_channel=16, hidden_channels=self.hidden_channels,
                                          hidden_size=self.hidden_size,
                                          kernel_size=self.rnn_kernel_size, )  # 这个kernel还是指cnn的kernel吧？
 
         '''论文中的ΦT'''
         self.reverse_layer = nn.Sequential(
-
             init_(nn.ConvTranspose2d(
-                in_channels=64,
-                out_channels=64,
+                in_channels=16,
+                out_channels=1,
                 kernel_size=self.cnn_kernel_size,
                 stride=2,
             )),
             nn.ReLU(),
-            # nn.Dropout(0.5),
-            # nn.Dropout(0.5),
-            init_(nn.ConvTranspose2d(
-                in_channels=64,
-                out_channels=6,
-                kernel_size=4,
-                stride=2,
-            )),
         )
 
     def forward(self, input_seq):
         """
-        :param input_seq: [Batch,Time,Channel,Size_m,Size_n]->[B,T,C,M,N] 也即(32, 7, 6, 64, 64)
-        TODO yyx:这里的Channel不包含任何时序上的堆叠,感觉就可以先理解成图片的通道
+        :param input_seq: [Batch,Time,Channel,Size_m,Size_n]->[B,T,C,M,N] 也即(32, 3, 1, 20, 20)
+
         :param is_valid: bool
         :return: [B,T,C,M,N]
         """
@@ -228,7 +226,7 @@ class PredictiveModel(nn.Module):
 
         for t in range(input_seq.shape[1]):
             # 输入shape=(32, 6, 64, 64) 输出shape=(32,64,14,14) 卷积后，图片尺寸变小了，通道数变多了~~
-            cnn_out = self.cnn_layer(input_seq[:, t, ...])
+            cnn_out = self.cnn_layer(input_seq[:, t, ...]) # 1,16,4,4
             _, hidden = self.rnn_layers(cnn_out, hidden)  # 把上一时刻的hidden也作为rnn模块的输入，也即peephole
             output_batch_list.append(self.reverse_layer(hidden[-1][0]).unsqueeze(dim=1))
         output_batch = torch.cat(output_batch_list, dim=1)
@@ -247,14 +245,15 @@ class ConvLSTMAgent(DPPOAgent):
             self.hidden_dim = input_args.g2a_hidden_dim
         self.attention_dim = 32
 
-        self.g2a_embed_hard_net = PredictiveModel(        input_channel=CONF['input_channel'],
-        hidden_channels=CONF[32],
-        frame_size=64,
-        cnn_kernel_size=3,
-        rnn_kernel_size=3,
-        device=device,
-        input_len=8,
-        seq_len=7).to(device)
+        self.prediction_model = PredictiveModel(       
+                                                input_channel=1,
+                                                hidden_channels=[16],
+                                                frame_size=64,
+                                                cnn_kernel_size=3,
+                                                rnn_kernel_size=3,
+                                                device=device,
+                                                input_len=None,
+                                                seq_len=None).to(device)
 
         pi_dict, v_dict = self.pi_args._toDict(), self.v_args._toDict()
         pi_dict['sizes'][0] = self.observation_dim  # share邻居的obs时做并集而不是concat
@@ -268,7 +267,29 @@ class ConvLSTMAgent(DPPOAgent):
         self.optimizer_v = Adam(self.vs.parameters(), lr=self.lr_v)
 
 
+    def get_prediction_state(self,state):
+        # state [B,N,S]
+        origin_map_shape = [20,20]
+        origin_size = origin_map_shape[0]*origin_map_shape[1]
+        obs_dim = state.shape[2]-origin_size
+        
+        origin_map = torch.reshape(state[:,:,-origin_size:],[-1,self.n_agent,1,origin_map_shape[0],origin_map_shape[1]]) # 即(32, 3, 1, 20, 20)
+        prediction_map = self.prediction_model(origin_map).view(-1,self.n_agent,81)
+        
+        new_state = torch.cat([state[:,:,0:obs_dim],prediction_map],dim=-1)
+        return new_state
 
 
 
 
+def calc_output_dim(dim_size, kernel_size, stride, padding, dilation):
+    numerator = dim_size + 2 * padding - dilation * (kernel_size - 1) - 1
+    return numerator // stride + 1
+
+
+
+if __name__ == "__main__":
+    output_dim = 20
+    output_dim = calc_output_dim(output_dim, 3, 1, 1, 1)
+    output_dim = calc_output_dim(output_dim, 3, 1, 1, 1)
+    print(output_dim)  # should be 5
