@@ -21,7 +21,7 @@ sys.path.append(os.getcwd())
 from env_configs.roadmap_env.roadmap_utils import *
 
 
-def render_HTML(output_dir, tag='train', draw_collect_range=False, debug=False):
+def render_HTML(output_dir, tag='train', debug=False):
     '''从params.json中拿到训练时参数'''
     json_file = osp.join(output_dir, 'params.json')
     with open(json_file, 'r') as f:
@@ -129,19 +129,32 @@ def render_HTML(output_dir, tag='train', draw_collect_range=False, debug=False):
     for index, traj in enumerate(trajs.trajectories):
         name, color = get_name_color_by_index(index)
         if index < uav_num:
-            uav_features = uav_traj_to_timestamped_geojson(index, traj, rm, uav_num, color,
-                                                           input_args, env_config, draw_collect_range=draw_collect_range)
+            uav_features1, uav_features2 = uav_traj_to_timestamped_geojson(index, traj, rm, uav_num, color,
+                                                           input_args, env_config)
             TimestampedGeoJson(
                 {
                     "type": "FeatureCollection",
-                    "features": uav_features,
+                    "features": uav_features1,
                 },
                 period="PT15S",
                 add_last_point=True,
-                transition_time=200,  # The duration in ms of a transition from between timestamps.
+                transition_time=200,
                 max_speed=0.2,
                 loop=True,
             ).add_to(map)
+            TimestampedGeoJson(
+                {
+                    "type": "FeatureCollection",
+                    "features": uav_features2,
+                },
+                period="PT15S",
+                duration="PT15S",
+                add_last_point=True,
+                transition_time=200,
+                max_speed=0.2,
+                loop=True,
+            ).add_to(map)
+
         else:
             features = traj_to_timestamped_geojson(index, traj, rm, uav_num, color,
                                                    input_args, env_config, aois, serves)
@@ -184,13 +197,11 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("--output_dir")
     parser.add_argument("--tag", type=str, default='train', choices=['train', 'test'], help='load trajs from train or test')
-    parser.add_argument("--draw_collect_range", action='store_true')
     parser.add_argument("--debug", action='store_true')
     args = parser.parse_args()
 
     render_HTML(
         args.output_dir,
         tag=args.tag,
-        draw_collect_range=args.draw_collect_range,
         debug=args.debug
     )

@@ -97,7 +97,6 @@ def traj_to_timestamped_geojson(index, trajectory, rm, uav_num, color,
     point_gdf = trajectory.df.copy()
     features = []
     # for Point in GeoJSON type
-    last_vis_coord = rm.lower_left
     for i, (current_time, row) in enumerate(point_gdf.iterrows()):  # 遍历一个人的不同时间步
 
         if index < uav_num:  # UAV
@@ -148,11 +147,10 @@ def traj_to_timestamped_geojson(index, trajectory, rm, uav_num, color,
 
 
 def uav_traj_to_timestamped_geojson(index, trajectory, rm, uav_num, color,
-                                    input_args, env_config, poi_QoS=None, draw_collect_range=False):
+                                    input_args, env_config, poi_QoS=None):
     point_gdf = trajectory.df.copy()
-    features = []
+    features1, features2 = [], []
     # for Point in GeoJSON type
-    last_vis_coord = rm.lower_left
     last_x, last_y, last_time = None, None, None
     for i, (current_time, row) in enumerate(point_gdf.iterrows()):  # 遍历一个人的不同时间步
 
@@ -171,7 +169,7 @@ def uav_traj_to_timestamped_geojson(index, trajectory, rm, uav_num, color,
         # for Point in GeoJSON type
         cur_coord = [[last_x, last_y], [new_x, new_y]]
 
-        feature1 = {
+        feature1 = {  # 轨迹的线
             "type": "Feature",
             "geometry": {
                 "type": "LineString",
@@ -194,42 +192,37 @@ def uav_traj_to_timestamped_geojson(index, trajectory, rm, uav_num, color,
                 "code": 11,
             },
         }
-        features.append(feature1)
-
-        collect_range = env_config['collect_range']
-
-        if draw_collect_range:
-            feature2 = {
-                "type": "Feature",
-                "geometry": {
-                    "type": "Point",
-                    "coordinates": cur_coord[1],
+        feature2 = {  # 机头的大点
+            "type": "Feature",
+            "geometry": {
+                "type": "Point",
+                "coordinates": cur_coord[1],
+            },
+            "properties": {
+                "times": [last_time, current_time.isoformat()],
+                "icon": 'circle',  # point
+                "iconstyle": {
+                    'fillColor': color,
+                    'fillOpacity': opacity,
+                    'stroke': 'true',
+                    'radius': 8,
+                    'weight': 1,
                 },
-                "properties": {
-                    "times": [current_time.isoformat()],
-                    "icon": 'circle',  # point
-                    "iconstyle": {  #
-                        'fillColor': color,
-                        'fillOpacity': 0.1,  # 这个改成1就不透明~
-                        'stroke': 'true',
-                        'radius': collect_range * 840 / 3255,  # 在zoom等级为15时，840等价于3255m
-                        'weight': 1,
-                    },
-                    "style": {  # 外边框的属性
-                        "color": color,
-                        "opacity": 0.0,
-                    },
-                    "code": 11,
+                "style": {  # 外边框的属性
+                    "color": color,
+                    "opacity": opacity
                 },
-            }
-            features.append(feature2)
-
+                "code": 11,
+            },
+        }
+        features1.append(feature1)
+        features2.append(feature2)
         last_x = new_x
         last_y = new_y
         last_time = current_time.isoformat()
 
 
-    return features
+    return features1, features2
 
 
 # 注意，这种画法圆的大小是和**地图**适配的
