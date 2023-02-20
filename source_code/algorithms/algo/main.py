@@ -33,8 +33,9 @@ def write_output(info, output_dir, tag='train'):
                 f"QoI: {'%.3f' % info['QoI']} "
                 f"episodic_aoi: {'%.3f' % info['episodic_aoi']} "
                 f"aoi_satis_ratio: {'%.3f' % info['aoi_satis_ratio']} "
-                f"tx_satis_ratio: {'%.3f' % info['tx_satis_ratio']} "
-                f"soft_tx_satis_ratio: {'%.3f' % info['soft_tx_satis_ratio']} "
+                f"data_satis_ratio: {'%.3f' % info['data_satis_ratio']} "
+                # f"tx_satis_ratio: {'%.3f' % info['tx_satis_ratio']} "
+                # f"soft_tx_satis_ratio: {'%.3f' % info['soft_tx_satis_ratio']} "
                 f"energy_consuming: {'%.3f' % info['energy_consuming']} "
                 + '\n'
                 )
@@ -233,13 +234,14 @@ class OnPolicyRunner:
                 self.logger.log(QoI=sum(d['QoI'] for d in env_info) / len(env_info),
                                 episodic_aoi=sum(d['episodic_aoi'] for d in env_info) / len(env_info),
                                 aoi_satis_ratio=sum(d['aoi_satis_ratio'] for d in env_info) / len(env_info),
-                                tx_satis_ratio=sum(d['tx_satis_ratio'] for d in env_info) / len(env_info),
-                                soft_tx_satis_ratio=sum(d['soft_tx_satis_ratio'] for d in env_info) / len(env_info),
+                                data_satis_ratio=sum(d['data_satis_ratio'] for d in env_info) / len(env_info),
+                                # tx_satis_ratio=sum(d['tx_satis_ratio'] for d in env_info) / len(env_info),
+                                # soft_tx_satis_ratio=sum(d['soft_tx_satis_ratio'] for d in env_info) / len(env_info),
                                 energy_consuming=sum(d['energy_consuming'] for d in env_info) / len(env_info),
-                                energy_consuming_ratio=sum(d['energy_consuming_ratio'] for d in env_info) / len(env_info),
-                                aoi_reward=sum(d['aoi_reward'] for d in env_info) / len(env_info),
+                                # energy_consuming_ratio=sum(d['energy_consuming_ratio'] for d in env_info) / len(env_info),
+                                good_reward=sum(d['good_reward'] for d in env_info) / len(env_info),
                                 aoi_penalty_reward=sum(d['aoi_penalty_reward'] for d in env_info) / len(env_info),
-                                tx_penalty_reward=sum(d['tx_penalty_reward'] for d in env_info) / len(env_info),
+                                # tx_penalty_reward=sum(d['tx_penalty_reward'] for d in env_info) / len(env_info),
                                 )
                 '''执行env的reset'''
                 try:

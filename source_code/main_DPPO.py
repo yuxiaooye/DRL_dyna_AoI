@@ -169,82 +169,9 @@ def override(alg_args, run_args, input_args, env):
     return alg_args, run_args, input_args
 
 
-def parse_args():
-    parser = argparse.ArgumentParser()
-    # 已经验证这里的参数可被存入params.json
 
-    parser.add_argument('--debug', action='store_true', default=False, )
-    parser.add_argument('--test', action='store_true', default=False, )
-    parser.add_argument('--user', type=str, default='yyx')
-    parser.add_argument('--env', type=str, default='Mobile')
-    parser.add_argument('--algo', type=str, required=False, default='IPPO', help="algorithm(DMPO/IC3Net/CPPO/DPPO/IA2C/IPPO) ")
-    parser.add_argument('--device', type=str, required=False, default='cuda:0', help="device(cpu/cuda:0/cuda:1/...) ")
-    parser.add_argument("--dataset", type=str, default='NCSU', choices=['NCSU', 'KAIST', 'purdue'])
-    parser.add_argument("--poi_num", type=int, default=None)
-    parser.add_argument("--tag", type=str, default='', help='每个单独实验的备注')
-    # dirs
-    parser.add_argument("--output_dir", type=str, default='runs/debug', help="which fold to save under 'runs/'")
-    parser.add_argument('--group', type=str, default='debug', help='填写我对一组实验的备注，作用与wandb的group和tb的实验保存路径')
-    # system stub
-    parser.add_argument('--mute_wandb', default=False, action='store_true')
-    # tune agent
-    parser.add_argument('--checkpoint', type=str)  # load pretrained model
-    parser.add_argument('--n_thread', type=int, default=16)
-    # tune algo
-    parser.add_argument('--lr', type=float)
-    parser.add_argument('--lr_v', type=float)
-    parser.add_argument('--use-stack-frame', action='store_true')
-    # parser.add_argument('--use_extended_value', action='store_false', help='反逻辑，仅用于DPPO')
-    # parser.add_argument('--use-mlp-model', action='store_true', help='将model改为最简单的mlp，仅用于DMPO')
-    # parser.add_argument('--multi-mlp', action='store_true', help='在model中分开预测obs中不同类别的信息，仅用于DMPO')
-    parser.add_argument('--g2a_hidden_dim', type=int, default=64, help='在model中分开预测obs中不同类别的信息，仅用于DMPO')
-    parser.add_argument('--tau', type=float, default=0.01)
-    parser.add_argument('--map_size', type=int, default=6)
-
-    # tune env
-    ## setting
-    parser.add_argument('--fixed-range', action='store_false')  # 重要，sensing range现在固定了
-    parser.add_argument('--snr', type=float, default=200)
-    parser.add_argument('--dyna_level', type=str, default='2', help='指明读取不同难度的poi_QoS.npy')
-    parser.add_argument('--init_energy', type=float, default=719280)
-    parser.add_argument('--user_data_amount', type=int, default=1)
-    parser.add_argument('--update_num', type=int, default=15)
-    parser.add_argument('--uav_num', type=int, default=3)
-    parser.add_argument('--fixed-col-time', action='store_false')
-    parser.add_argument('--aoith', default=60, type=int)
-    parser.add_argument('--txth', default=5, type=int)
-    parser.add_argument('--uav_height', default=100, type=int)
-    parser.add_argument('--knn_coefficient', default=-1, type=float,help='knn奖励系数')
-    parser.add_argument('--hao02191630', action='store_false')
-
-    ## MDP
-    parser.add_argument('--max_episode_step', type=int, default=120)
-    parser.add_argument('--future_obs', type=int, default=0)
-    parser.add_argument('--use_snrmap', action='store_true')  # shrotcut is always used
-    parser.add_argument('--aVPS', type=float, default=0.2)
-    parser.add_argument('--tVPS', type=float, default=0.2)
-    args = parser.parse_args()
-
-    # if args.multi_mlp:
-    #     assert args.use_mlp_model
-
-    if args.debug:
-        args.group = 'debug'
-    args.output_dir = f'runs/{args.group}'
-
-    if args.test:
-        args.group = 'test'
-        args.n_thread = 1
-        args.output_dir = f'{args.checkpoint}/test'
-
-    if args.dataset == 'NCSU' and args.update_num == 15:
-        args.update_num = 10  # 在NCSU的默认值调小
-
-
-    return args
-
-
-input_args = parse_args()
+from get_args import parse_args
+input_args, env_args = parse_args()
 
 
 def record_input_args(input_args, env_args, output_dir):
@@ -282,23 +209,6 @@ if input_args.env == 'Mobile':
 else:
     raise NotImplementedError
 
-env_args = {  # 这里环境类的参数抄昊宝
-    "emergency_threshold": 100,
-    "max_episode_step": input_args.max_episode_step,
-    "collect_range": input_args.snr,
-    "initial_energy": input_args.init_energy,
-    "user_data_amount": input_args.user_data_amount,
-    "update_num": input_args.update_num,
-    "uav_num": input_args.uav_num,
-    "AoI_THRESHOLD": input_args.aoith,
-    "RATE_THRESHOLD": input_args.txth,
-    "uav_height": input_args.uav_height,
-    "aoi_vio_penalty_scale": input_args.aVPS,
-    "tx_vio_penalty_scale": input_args.tVPS,
-    "hao02191630": input_args.hao02191630,
-}
-if input_args.poi_num is not None:
-    env_args["poi_num"] = input_args.poi_num
 
 run_args = getRunArgs(input_args)
 print('debug =', run_args.debug)
@@ -311,8 +221,6 @@ if not input_args.test:
     record_input_args(input_args, env_args, run_args.output_dir)
 
 from env_configs.wrappers.env_wrappers import SubprocVecEnv
-
-
 envs_train = SubprocVecEnv([env_fn_train(env_args, input_args, phase='train') for _ in range(input_args.n_thread)])
 envs_test = SubprocVecEnv([env_fn_test(env_args, input_args, phase='test') for _ in range(1)])
 

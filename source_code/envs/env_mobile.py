@@ -102,9 +102,9 @@ class EnvMobile():
 
     def reset(self):
 
-        # yyx 0216 add
+        # self.remain_data = [0 for _ in range(self.POI_NUM)]
         self.poi_aoi = [0 for _ in range(self.POI_NUM)]
-        self.poi_aoi_area = [0 for _ in range(self.POI_NUM)]
+        # self.poi_aoi_area = [0 for _ in range(self.POI_NUM)]
 
         self.uav_trace = [[] for i in range(self.UAV_NUM)]
         self.uav_state = [[] for i in range(self.UAV_NUM)]
@@ -116,12 +116,12 @@ class EnvMobile():
         self.aoi_vio_ratio_list = []  # 当前时间步有多大比例的PoI违反了aoi阈值
         self.tx_satis_ratio_list = []  # 当前时间步有多大比例的被服务aoi满足了data rate阈值
         # 监视下面几个reward乘上ratio之前的尺度
-        self.aoi_reward_list = []
+        self.good_reward_list = []
         self.aoi_penalty_reward_list = []
         self.tx_penalty_reward_list = []
         self.soft_tx_satis_ratio_list = []
 
-        self.aoi_history = [0]  # episode结束后，长度为121。为什么初始时要有一个0？
+        self.aoi_history = []  # 每个时间步的user平均aoi
 
         self.step_count = 0
 
@@ -134,22 +134,17 @@ class EnvMobile():
             dtype=np.float16)
         self.poi_position = copy.deepcopy(self.poi_mat[:, 0, :])  # 0意为t=0时poi的初始位置
 
-        self.poi_aoi = [0 for _ in range(self.POI_NUM)]
-
         self.collision_count = 0
 
         # 添加初始信息到一些数组中
         for uav_index in range(self.UAV_NUM):
             self.uav_trace[uav_index].append(self.uav_position[uav_index].tolist())
-        self.poi_history.append({
-            'pos': copy.deepcopy(self.poi_position),
-            'aoi': np.array([0 for _ in range(self.POI_NUM)])
-        })
+
 
         self.check_arrival()
         # self.cpu_preprocessor.reset()
         self.stacked_obs = [None for _ in range(4)]
-        self.get_obs()
+        return self.get_obs()
 
     def render(self, mode='human'):
         pass
@@ -178,7 +173,7 @@ class EnvMobile():
             access_lists.append(access_list)
         return access_lists
 
-    def step(self, action):
+    def step(self, action, collect_time=12.5):
         action1, action2 = [item[0] for item in action], [item[1] for item in action]
 
         # 若max_episode_step=120, 则执行120次step方法。episode结束时保存120个poi和uav的位置点，而不是icde的121个，把poi、uav的初始位置扔掉！
@@ -219,49 +214,36 @@ class EnvMobile():
 
         uav_rewards = np.zeros(self.UAV_NUM)
         for poi_id, sum_rate in enumerate(sum_rates):
-            if sum_rate < self.RATE_THRESHOLD:
-                continue  # 不满足阈值
-
-            ## aoi reset
-            before_reset = self.poi_aoi[poi_id]
-            self.poi_aoi[poi_id] = 0  # 戴总是reset到1，不过我后面会在check_arrival()里+=1，和戴总的等价
-
-            ## 计算poi_aoi_area
-            self.poi_aoi_area[poi_id] += 1 / 2 * (before_reset * self.TIME_SLOT) ** 2  # 加一块三角形的面积
+            if sum_rate < self.RATE_THRESHOLD: continue  # 不满足阈值
+            ability = int(collect_time / (self.USER_DATA_AMOUNT / sum_rate))  # int向下取整没问题
+            real = min(self.poi_aoi[poi_id], ability)
+            before = self.poi_aoi[poi_id]
+            self.poi_aoi[poi_id] -= real  # aoi reset
 
             ## 计算aoi reset reward和bonus reward
-            # 当年戴总infocom2022的定义是收集前平均aoi减收集后平均aoi，和现在我用的一致
             rate_contribute_to_that_poi = np.zeros(self.UAV_NUM)
             for uav_id, access_list in enumerate(access_lists):
                 for pid, rate, dis in access_list:
                     if poi_id == pid:
-                        # 收集aoi越大的user，奖励越大；rate/sum_rate相当于credit assignment
-                        r = (before_reset / self.MAX_EPISODE_STEP) * (rate / sum_rate)  # TODO 可以把后面的删掉
+                        # data coll * aoi vio * credit assignment
+                        # r = (before - self.poi_aoi[poi_id]) * (before / self.MAX_EPISODE_STEP) * (rate / sum_rate)
+                        r = (before / self.MAX_EPISODE_STEP) * (rate / sum_rate)
                         uav_rewards[uav_id] += r
                         rate_contribute_to_that_poi[uav_id] = rate
 
-            self.aoi_reward_list.extend(uav_rewards)  # fix bug
+            self.good_reward_list.extend(uav_rewards)
+            if self.debug: print(uav_rewards)
 
-            print(uav_rewards)
 
-        visit_num = sum(sum_rates > 0)
-        if visit_num != 0:
-            satis_ratio = sum(sum_rates >= self.RATE_THRESHOLD) / visit_num  # 不统计没被访问的poi，所以分子不是POI_NUM
-            self.tx_satis_ratio_list.append(satis_ratio)
-            # uav_rewards *= satis_ratio  # 把aoi的收集奖励根据tx satis ratio scale一下
-            penalty_r = -np.ones(self.UAV_NUM) * (1-satis_ratio) * self.tx_vio_penalty_scale
-            self.tx_penalty_reward_list.extend((penalty_r / self.tx_vio_penalty_scale).tolist())
-            uav_rewards += penalty_r
-            
-        if self.KNN_COEFFCICENT> -1:
+        if self.KNN_COEFFCICENT > -1:
             uav_trajectory = []
             for i in range(self.UAV_NUM):
                 uav_trajectory.extend(self.uav_trace[i])
-            d_map = list(map(lambda x: ((x[0]-self.uav_position[uav_index][0])**2+(x[1]-self.uav_position[uav_index][1])**2)**0.5, uav_trajectory))
+            d_map = list(map(lambda x: ((x[0] - self.uav_position[uav_index][0]) ** 2 + (x[1] - self.uav_position[uav_index][1]) ** 2) ** 0.5, uav_trajectory))
             d_map.sort(reverse=False)
 
-            intrinsic_reward =np.mean(d_map[:10])/1000*self.KNN_COEFFCICENT if len(d_map)>0 else 0 
-            #print("{},{}".format(uav_rewards[uav_index],intrinsic_reward))
+            intrinsic_reward = np.mean(d_map[:10]) / 1000 * self.KNN_COEFFCICENT if len(d_map) > 0 else 0
+            # print("{},{}".format(uav_rewards[uav_index],intrinsic_reward))
             uav_rewards[uav_index] += intrinsic_reward
 
         done = self._is_episode_done()
@@ -271,24 +253,13 @@ class EnvMobile():
         '''step2. 维护当前时间步对aoi值的相关统计值'''
         now_aoi = 0  # 当前时间步所有poi的aoi值总和
         em_now = 0
-        soft_em_now = 0
         aoi_list = []  # 当前时间步各poi的aoi值
         for i in range(self.POI_NUM):
             aoi = self.poi_aoi[i]
             if aoi > self.AoI_THRESHOLD:  # 超过了AoI阈值
                 em_now += 1
-            if aoi > 0.8 * self.AoI_THRESHOLD:
-                soft_em_now += 1
             now_aoi += aoi
             aoi_list.append(aoi)
-
-        if soft_emergency_list == []:
-            self.soft_tx_satis_ratio_list.append(1)
-        else:
-            emer_satis_num = len(list(  # 有个问题，现在emergency_list统计时没加soft
-                filter(lambda x: x[0] in soft_emergency_list and x[1] > self.RATE_THRESHOLD, enumerate(sum_rates))
-            ))
-            self.soft_tx_satis_ratio_list.append(emer_satis_num/len(soft_emergency_list))
 
         self.poi_history.append({
             'pos': copy.deepcopy(self.poi_position),
@@ -297,17 +268,17 @@ class EnvMobile():
         self.aoi_history.append(now_aoi / self.POI_NUM)
         self.aoi_vio_ratio_list.append(em_now / self.POI_NUM)
 
-        # 惩罚基于当前时刻soft违反AoIth的user的比例，所有uav的惩罚相同
-        if soft_em_now != 0:
-            penalty_r = -np.ones(self.UAV_NUM) * (soft_em_now / self.POI_NUM) * self.aoi_vio_penalty_scale
+        # 惩罚基于当前时刻违反AoIth的user的比例，所有uav的惩罚相同
+        if em_now != 0:
+            penalty_r = -np.ones(self.UAV_NUM) * (em_now / self.POI_NUM) * self.aoi_vio_penalty_scale
             self.aoi_penalty_reward_list.extend((penalty_r / self.aoi_vio_penalty_scale).tolist())
             uav_rewards += penalty_r
+        else:
+            self.aoi_penalty_reward_list.extend(np.zeros(self.UAV_NUM))  # 统计尺度时把episode里没有惩罚的步数也要算上
 
         '''step3. episode结束时的后处理'''
         info = {}
         if done:
-            for poi_id in range(self.POI_NUM):  # 最后补一块三角形的面积，清算
-                self.poi_aoi_area[poi_id] += 1 / 2 * (self.poi_aoi[poi_id] * self.TIME_SLOT) ** 2
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore", category=RuntimeWarning)
                 info = self.summary_info(info)
@@ -318,22 +289,25 @@ class EnvMobile():
     def summary_info(self, info):
         t_e = np.sum(np.sum(self.uav_energy_consuming_list))
 
-        # 分子是图2黄色部分面积，分母前三项是以秒为单位的总时间，单位是时间步数量
-        episodic_aoi = sum(self.poi_aoi_area) / (self.POI_NUM * self.MAX_EPISODE_STEP * self.TIME_SLOT * self.TIME_SLOT)
+        episodic_aoi = np.mean(self.aoi_history)
         aoi_satis_ratio = sum(1 - np.array(self.aoi_vio_ratio_list)) / self.step_count
-        tx_satis_ratio = sum(self.tx_satis_ratio_list) / len(self.tx_satis_ratio_list)
-        soft_tx_satis_ratio = sum(self.soft_tx_satis_ratio_list) / len(self.soft_tx_satis_ratio_list)
-        energy_consuming_ratio = t_e / (self.UAV_NUM * self.INITIAL_ENERGY)
+        data_satis_ratio = 1 - sum(self.poi_aoi) / (self.POI_NUM * self.MAX_EPISODE_STEP)
+        # tx_satis_ratio = sum(self.tx_satis_ratio_list) / len(self.tx_satis_ratio_list)
+        # soft_tx_satis_ratio = sum(self.soft_tx_satis_ratio_list) / len(self.soft_tx_satis_ratio_list)
+        # energy_consuming_ratio = t_e / (self.UAV_NUM * self.INITIAL_ENERGY)
         info['episodic_aoi'] = episodic_aoi
         info['aoi_satis_ratio'] = aoi_satis_ratio
-        info['tx_satis_ratio'] = tx_satis_ratio
-        info['soft_tx_satis_ratio'] = soft_tx_satis_ratio
+        info['data_satis_ratio'] = data_satis_ratio
+        # info['tx_satis_ratio'] = tx_satis_ratio
+        # info['soft_tx_satis_ratio'] = soft_tx_satis_ratio
         info['energy_consuming'] = t_e / 10 ** 6  # 单位：MJ
-        info['energy_consuming_ratio'] = energy_consuming_ratio
-        info['QoI'] = min(aoi_satis_ratio, tx_satis_ratio) / (t_e / self.UAV_NUM / 10 ** 6)
-        info['aoi_reward'] = np.mean(self.aoi_reward_list)
+        # info['energy_consuming_ratio'] = energy_consuming_ratio
+        info['QoI'] = min(aoi_satis_ratio, data_satis_ratio) / (t_e / self.UAV_NUM / 10 ** 6)
+        info['good_reward'] = np.mean(self.good_reward_list)
         info['aoi_penalty_reward'] = np.mean(self.aoi_penalty_reward_list) if len(self.aoi_penalty_reward_list) != 0 else 0
-        info['tx_penalty_reward'] = np.mean(self.tx_penalty_reward_list) if len(self.tx_penalty_reward_list) != 0 else 0
+        # info['tx_penalty_reward'] = np.mean(self.tx_penalty_reward_list) if len(self.tx_penalty_reward_list) != 0 else 0
+
+        if self.debug: print(info)
 
         return info
 

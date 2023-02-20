@@ -24,6 +24,10 @@ class G2AEmbedNet(nn.Module):
         self.tau = tau
 
         # Encoding
+
+
+
+
         self.encoding = nn.Linear(obs_dim, self.hidden_dim)  # 对所有agent的obs解码
 
         # Hard
@@ -39,6 +43,10 @@ class G2AEmbedNet(nn.Module):
         self.k = nn.Linear(self.hidden_dim, self.attention_dim, bias=False)
         self.v = nn.Linear(self.hidden_dim, self.attention_dim)
 
+        params_num = 0
+        for name, params in self.encoding.named_parameters():  # 统计参数就先算了 反正biGRU先留着
+            params_num += params.numel()
+
 
     def forward(self, obs):
         '''
@@ -48,7 +56,7 @@ class G2AEmbedNet(nn.Module):
         assert self.n_agent == obs.shape[1]
         size = self.n_agent * n_thread  # 从n_agent改为n_agent*n_thread适配向量环境
         # encoding
-        h_out = f.relu(self.encoding(obs))  # (batch_size, n_agent, dim)
+        h_out = f.relu(self.encoding(obs))  # (batch_size, n_agent, dim)  # TODO 留
 
         # Hard Attention，GRU和GRUCell不同，输入的维度是(序列长度, batch_size, dim)
         if self.hard:
@@ -74,7 +82,7 @@ class G2AEmbedNet(nn.Module):
             h_hard = h_hard.permute(1, 0, 2)  # (batch_size * n_agents, n_agents - 1, hidden_dim * 2)
             h_hard = h_hard.reshape(-1, self.hidden_dim * 2)  # (batch_size * n_agents * (n_agents - 1), hidden_dim * 2)
 
-            hard_weights = self.hard_encoding(h_hard)  # 将(6, 128)映射为(6, 2)
+            hard_weights = self.hard_encoding(h_hard)  # 将(6, 128)映射为(6, 2)  # TODO 留
             hard_weights = f.gumbel_softmax(hard_weights, tau=self.tau)
             # print(hard_weights)
             # TODO 明天再check一下这里

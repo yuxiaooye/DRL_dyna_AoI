@@ -175,9 +175,11 @@ def worker(remote, parent_remote, env_fn_wrapper):
             #     if np.all(done):
             #         ob = env.reset()
             remote.send((ob, reward, done, info))
+        elif cmd == 'get_step_count':
+            remote.send(env.step_count)
         elif cmd == 'reset':
-            env.reset()
-            remote.send('')
+            obs = env.reset()
+            remote.send(obs)
         elif cmd == 'render':
             if data == "rgb_array":
                 fr = env.render(mode=data)
@@ -299,8 +301,8 @@ class SubprocVecEnv(ShareVecEnv):
     def reset(self):
         for remote in self.remotes:
             remote.send(('reset', None))
-        results = [remote.recv() for remote in self.remotes]
-        return
+        results = [remote.recv()['Box'] for remote in self.remotes]
+        return np.stack(results)
 
     def reset_task(self):
         for remote in self.remotes:
@@ -312,6 +314,12 @@ class SubprocVecEnv(ShareVecEnv):
             remote.send(('get_saved_trajs', None))
         results = [remote.recv() for remote in self.remotes]
         return np.stack(results)
+
+    def get_step_count(self):
+        for remote in self.remotes:
+            remote.send(('get_step_count', None))
+        results = [remote.recv() for remote in self.remotes]
+        return results[0]
 
     def get_obs_from_outside(self):
         for remote in self.remotes:
