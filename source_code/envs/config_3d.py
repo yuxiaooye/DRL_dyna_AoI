@@ -58,7 +58,7 @@ class Config(object):
 
             # UAV
             'uav_num': 3,
-            "agent_field": 750,  # 2.18下午改之前是500
+            "agent_field": 750,
 
             # PoI
             "update_num": 10,  # 一个uav同时服务多少个poi
@@ -68,10 +68,10 @@ class Config(object):
             "collect_range": 500,
             "w_noise": -104,
             "RATE_THRESHOLD": 5,  # 关键 Mbps
-            "AoI_THRESHOLD": 100,  # 关键
+            "AoI_THRESHOLD": 60,  # 关键
             "bonus_reward_ratio": 0.0,  # 这个ratio就算要设，也必须比penalty ratio小很多，因为他俩本身的尺度不一样
             "aoi_vio_penalty_scale": 0.2,
-            "tx_vio_penalty_scale": 0.01,
-            "hao02191630": False
+            "tx_vio_penalty_scale": 0.2,
+            "hao02191630": True
         }
 

@@ -95,8 +95,8 @@ def override(alg_args, run_args, input_args, env):
 
     # tune env
     ## setting
-    if input_args.snr != 500:
-        run_args.name += f'_SNR={input_args.snr}'
+    if input_args.collect_range != 500:
+        run_args.name += f'_SNR={input_args.collect_range}'
     if input_args.dyna_level != '2':
         run_args.name += f'_DynaLevel={input_args.dyna_level}'
     if input_args.init_energy != 719280:
