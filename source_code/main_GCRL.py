@@ -9,6 +9,7 @@ import importlib.util
 import torch
 import gym
 import copy
+from datetime import datetime
 
 from tensorboardX import SummaryWriter
 from algorithms.GCRL.envs.model.agent import Agent
@@ -17,6 +18,14 @@ from algorithms.GCRL.method.memory import ReplayMemory
 from algorithms.GCRL.method.explorer import Explorer
 from algorithms.GCRL.policies.policy_factory import policy_factory
 import numpy as np
+
+
+
+
+def initAgent(logger, device, agent_args, input_args):
+    return agent_fn(logger, device, agent_args, input_args)
+
+
 
 
 def set_random_seeds(seed):
@@ -40,29 +49,6 @@ def main():
     config = 'algorithms/GCRL/configs/infocom_benchmark/mp_separate_dp.py'
     test_after_every_eval = True
 
-    # parser = argparse.ArgumentParser('Parse configuration file')
-    # parser.add_argument('--config', type=str, default='algorithms/GCRL/configs/infocom_benchmark/mp_separate_dp.py')
-    # parser.add_argument('--output_dir', type=str, default='logs/debug')  # output_xxxx
-    # parser.add_argument('--overwrite', default=False, action='store_true')
-    #
-    # parser.add_argument('--weights', type=str)
-    # parser.add_argument('--gpu_id', type=str, default='-1')
-    # parser.add_argument('--gpu', default=False, action='store_true')
-    #
-    # parser.add_argument('--debug', default=False, action='store_true')  # 开启debug模式
-    # parser.add_argument('--test_after_every_eval', default=False, action='store_true')
-    # parser.add_argument('--randomseed', type=int, default=0)
-    #
-    # parser.add_argument('--vis_html', default=False, action='store_true')
-    # parser.add_argument('--plot_loop', default=False, action='store_true')
-    # parser.add_argument('--moving_line', default=False, action='store_true')
-    #
-    # parser.add_argument('--clip', type=str, default='-1,-1')  # 绘制的时间跨度，闭区间（默认不裁剪
-    # parser.add_argument('--users', type=str, default='-1')  # 绘制的人群，列表（默认不删人
-    # parser.add_argument('--dataset', type=str, default='Purdue')  # 数据集
-    # parser.add_argument('--draw_only', default=False, action='store_true')  # 当外存有机器人数据时，置为true
-    #
-    # sys_args = parser.parse_args()
 
 
 
@@ -148,6 +134,12 @@ def main():
     if not policy.trainable:
         parser.error('Policy has to be trainable')
     policy.set_device(device)
+
+    # add
+    policy_config.obs_dim = dummy_env.obs_space['Box'].shape[1]  # 151 in NCSU with 48 users
+    policy_config.act_dim = dummy_env.action_space.shape[0]  # 2
+    policy_config.update_num = input_args.update_num
+
     policy.configure(policy_config, poi_df)
 
     # read training parameters
@@ -180,7 +172,26 @@ def main():
                           detach_state_predictor=train_config.train.detach_state_predictor,
                           share_graph_model=policy_config.model_predictive_rl.share_graph_model)
 
-    explorer = Explorer(envs_train, agent, device, writer, memory, policy.gamma, target_policy=policy)
+
+
+    from algorithms.utils import Config
+    alg_args, run_args = Config(), Config()
+    run_args.debug = input_args.debug
+    run_args.group = input_args.group
+    run_args.mute_wandb = input_args.mute_wandb
+    run_args.output_dir = '../runs/GCRL'  # hard_code
+    run_args.log_period = int(20)
+    run_args.seed = 1
+    run_args.algo = None
+    timenow = datetime.strftime(datetime.now(), "%Y-%m-%d_%H-%M-%S")
+    run_args.name = '{}_{}_{}'.format(timenow, input_args.dataset, 'GCRL')
+
+
+    from algorithms.utils import LogClient, LogServer
+    logger = LogServer({'run_args': run_args, 'algo_args': alg_args, 'input_args': input_args})
+    logger = LogClient(logger)
+    explorer = Explorer(envs_train, agent, device, input_args, logger,
+                        memory, policy.gamma, target_policy=policy)
 
     logging.info('We use random-exploration methods to warm-up.')
     trainer.update_target_model(model)  # target网络的初始参数与model网络一致
@@ -192,16 +203,13 @@ def main():
     # env.set_agent(agent)
     trainer.set_learning_rate(rl_learning_rate)
 
-    # warmup: fill the memory pool with some experience
-    # agent.policy.set_epsilon(1)
-    # explorer.run_k_episodes(k=warmup_episodes, phase='train', update_memory=True, plot_index=-1)  # 100
-    # logging.info('Warm-up finished!')
-    # logging.info('Experience set size: %d/%d\n', len(memory), memory.capacity)
+
 
     episode = 0
     best_val_reward = -1e6
     best_val_model = None
 
+    num_episodes = 3e6 // (input_args.n_thread*input_args.max_episode_step)
     while episode < num_episodes:
         # epsilon-greedy
         if episode < epsilon_decay:
@@ -213,8 +221,8 @@ def main():
         # sample k episodes into memory and optimize over the generated memory
         explorer.run_k_episodes(k=sample_episodes, phase='train', update_memory=True, plot_index=-1)  # 与环境交互采样数据
 
-        explorer.log('train', episode)
-        trainer.optimize_batch(num_batches, episode)  # TODO 训练！其实trainer最核心的就是干这个 其他都可看可不看
+        # explorer.log('train', episode)
+        trainer.optimize_batch(num_batches, episode)  # 训练！其实trainer最核心的就是干这个
         logging.info(f"ep {episode} training is finished. epsilon={epsilon}\n")
 
         episode += 1
@@ -223,18 +231,20 @@ def main():
             trainer.update_target_model(model)
         # evaluate the model
         if episode % evaluation_interval == 0:
-            average_reward, _, _, _ ,_,_ = explorer.run_k_episodes(k=evaluate_episodes, phase='val',
-                                                              plot_index=-1)
-            explorer.log('val', episode // evaluation_interval)
-
-            if episode % checkpoint_interval == 0 and average_reward.mean() > best_val_reward:
-                logging.info("Best reward model has been changed.")
-                best_val_reward = average_reward
-                best_val_model = copy.deepcopy(policy.get_state_dict())
-            # test after every evaluation to check how the generalization performance evolves
-            if test_after_every_eval:
-                explorer.run_k_episodes(k=1, phase='test', plot_index=episode)
-                explorer.log('test', episode // evaluation_interval)
+            pass
+            # average_reward, _, _, _ ,_,_ = explorer.run_k_episodes(k=evaluate_episodes, phase='val',
+            #                                                   plot_index=-1)
+            # explorer.log('val', episode // evaluation_interval)
+            #
+            # if episode % checkpoint_interval == 0 and average_reward.mean() > best_val_reward:
+            #     logging.info("Best reward model has been changed.")
+            #     best_val_reward = average_reward
+            #     best_val_model = copy.deepcopy(policy.get_state_dict())
+            # # test after every evaluation to check how the generalization performance evolves
+            # if test_after_every_eval:
+            #     # explorer.run_k_episodes(k=1, phase='test', plot_index=episode)
+            #     # explorer.log('test', episode // evaluation_interval)
+            #     pass
 
         if episode % checkpoint_interval == 0:
             current_checkpoint = episode // checkpoint_interval - 1
@@ -248,7 +258,7 @@ def main():
         logging.info('Save the best val model with the reward: {}'.format(best_val_reward))
 
     logging.info('Check the best val model\'s performance')
-    explorer.run_k_episodes(k=1, phase='test', plot_index=66666)
+    # explorer.run_k_episodes(k=1, phase='test', plot_index=66666)
 
     print('OK!')
 

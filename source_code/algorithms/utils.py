@@ -475,7 +475,6 @@ class LogServer(object):
         )
         self.writer.add_text("config", f"{run_args._toDict(recursive=True)}")
 
-        self.save_period = run_args.save_period
         self.last_save = time.time()
         self.state_dict = {}
         self.step = 0
@@ -522,14 +521,6 @@ class LogServer(object):
 
     def save(self, state_dict=None, info=None, flush=True):
         pass  # 我不需要用这种方式调用torch.save保存模型 而是用我自己的方法
-        # if not state_dict is None:
-        #     self.state_dict.update(**state_dict)
-        # if flush and time.time() - self.last_save >= self.save_period:
-        #     filename = f"{self.step}_{info}.pt"
-        #     with open(f"checkpoints/{self.name}/{filename}", 'wb') as f:
-        #         torch.save(self.state_dict, f)
-        #     print(f"checkpoint saved as {filename}")
-        #     self.last_save = time.time()
 
 
 def setSeed(seed):

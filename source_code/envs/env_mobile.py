@@ -158,7 +158,10 @@ class EnvMobile():
         pass
 
     def _human_move(self):
-        self.poi_position = copy.deepcopy(self.poi_mat[:, self.step_count, :])
+        try:
+            self.poi_position = copy.deepcopy(self.poi_mat[:, self.step_count, :])
+        except:
+            print(1)
 
     def _uavs_access_users(self, max_access_num):
         max_access_num = np.array(max_access_num) + 1  # +1将0~8映射到1~9

@@ -89,15 +89,27 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
             return self.get_prediction_state(s)
         
         if self.input_args.algo == 'G2ANet':  # 拿到hard_att的邻居图后，根据邻居图对obs取并集
+
             hard_atts = self.g2a_embed_hard_net(s)
-            hard_atts = hard_atts.squeeze(-2)  # shape = (agent, n_thread, agent-1)
-            n_thread = hard_atts.shape[1]
-            ans_s = []
-            for i in range(self.n_agent):
-                hard_att = hard_atts[i]
-                # 添加对自己的hard-att一定是1的维度
+            hard_atts = hard_atts.squeeze(-2)  # shape = (agent, thread, agent-1)
+            n_agent, n_thread = hard_atts.shape[0], hard_atts.shape[1]
+
+            square_atts = []
+            for i, hard_att in enumerate(hard_atts):  # 添加对自己的hard-att一定是1的维度
                 hard_att = torch.cat([hard_att[:, :i], torch.ones(n_thread, 1).to(self.device), hard_att[:, i:]], dim=-1) #[1,3]
-                shared_s = s * hard_att.unsqueeze(-1)  # mask后仅邻居的状态可见
+                square_atts.append(hard_att)
+            square_atts = torch.stack(square_atts).permute((1, 0, 2))  # (thread, agent, agent)
+
+            khop_atts = []
+            for n in range(n_thread):  # k-hops
+                khop_att = torch.matrix_power(square_atts[n], self.input_args.g2a_hops)
+                khop_att = torch.clip(khop_att, 0, 1)  # 矩阵幂后会有2
+                khop_atts.append(khop_att)
+            khop_atts = torch.stack(khop_atts).permute((1, 0, 2))  # (agent, thread, agent)
+
+            ans_s = []
+            for i, hard_att in enumerate(khop_atts):  # 施加att到s上
+                shared_s = s * hard_att.unsqueeze(-1)
                 shared_s = torch.sum(shared_s, dim=1)
                 shared_s = torch.where(s[:,i] > 0, s[:, i], shared_s)  # 取并集
                 ans_s.append(shared_s)

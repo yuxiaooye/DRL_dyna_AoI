@@ -8,7 +8,7 @@ class ValueEstimator(nn.Module):
         super().__init__()
         # self.graph_model = graph_model
         # self.value_network = mlp(config.gcn.X_dim, network_dim)
-        self.value_network = mlp(157, [128, 128, 1]).to(device)  # TODO 输入的157是硬编码的obs_dim
+        self.value_network = mlp(config.obs_dim, [128, 128, 1]).to(device)
 
     def forward(self, state):
         """ Embed state into a latent space. Take the first row of the feature matrix as state representation.

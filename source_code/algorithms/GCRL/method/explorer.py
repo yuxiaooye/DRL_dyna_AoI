@@ -5,11 +5,13 @@ import numpy as np
 from algorithms.GCRL.envs.model.utils import *
 
 class Explorer(object):
-    def __init__(self, envs, robot, device, writer=None, memory=None, gamma=None, target_policy=None):
+    def __init__(self, envs, robot, device, input_args, logger=None,
+                 memory=None, gamma=None, target_policy=None):
         self.envs = envs
         self.robot = robot
         self.device = device
-        self.writer = writer
+        self.input_args = input_args
+        self.logger = logger
         self.memory = memory
         self.gamma = gamma
         self.target_policy = target_policy
@@ -27,16 +29,8 @@ class Explorer(object):
         update_human_coverage_list = []
 
 
-        from algorithms.GCRL.policies.gcn import GCN
-        # flag = 0 if isinstance(self.robot.policy, GCN) else 1  # 模型为gcn时，没有A1
-        # A0_list = []
-        # A0_std_list = []
-        # if flag:
-        #     A1_list = []
-        #     A1_std_list = []
-
-
         for ep_i in range(k):
+            print(f'run episodes {ep_i} / {k}')
             state = self.envs.reset()  # shape = (n_thread, n_agent, dim)  # 157 here
             done = False
             states = []
@@ -51,17 +45,31 @@ class Explorer(object):
                 #     action = noisy_action(action)
                 # print(action)
                 # print(self.envs.start_timestamp+self.envs.current_timestep*self.envs.step_time,action)
-                state, reward, done, info = self.envs.step(np.array(action.cpu()))  # 东西存在info里
+                state, reward, done, env_info = self.envs.step(np.array(action.cpu()))  # 东西存在info里
                 done = done.any()
-                print('step {}, reward={}'.format(s, reward))
+                # print('step {}, reward={}'.format(s, reward))
 
                 s += 1
+                self.logger.log(interaction=None)
                 states.append(self.robot.policy.last_state)
                 actions.append(action)
                 rewards.append(reward)
                 if done:
-                    pass
-                    # TODO 应该调用我的summary_info()
+                    ep_r = np.transpose(np.array(rewards), (1, 0, 2))  # (threads, 120, 3)
+                    ep_r = ep_r.sum(axis=-1).sum(axis=-1)  # (threads, )
+                    self.logger.log(mean_episode_reward=ep_r.mean(), episode_len=self.input_args.max_episode_step, episode=None)
+                    self.logger.log(max_episode_reward=ep_r.max(), episode_len=self.input_args.max_episode_step, episode=None)
+
+                    self.logger.log(QoI=sum(d['QoI'] for d in env_info) / len(env_info),
+                                    episodic_aoi=sum(d['episodic_aoi'] for d in env_info) / len(env_info),
+                                    aoi_satis_ratio=sum(d['aoi_satis_ratio'] for d in env_info) / len(env_info),
+                                    data_satis_ratio=sum(d['data_satis_ratio'] for d in env_info) / len(env_info),
+                                    energy_consuming=sum(d['energy_consuming'] for d in env_info) / len(env_info),
+                                    good_reward=sum(d['good_reward'] for d in env_info) / len(env_info),
+                                    aoi_penalty_reward=sum(d['aoi_penalty_reward'] for d in env_info) / len(env_info),
+                                    knn_reward=sum(d['knn_reward'] for d in env_info) / len(env_info),
+                                    )
+
 
             if update_memory:
                 self.update_memory(states, actions, rewards)  # 这里存的actions不对
@@ -120,16 +128,6 @@ class Explorer(object):
             self.memory.push((state, action, value, reward, next_state))
 
 
-    def log(self, tag_prefix, global_step):
-        reward, avg_return, aoi, energy_consumption, collected_data_amount, ave_human_coverage = self.statistics
-        # good_reward_list stuck here
-
-        self.writer.add_scalar(tag_prefix + '/reward', np.mean(reward), global_step)
-        self.writer.add_scalar(tag_prefix + '/avg_return', np.mean(avg_return), global_step)
-        self.writer.add_scalar(tag_prefix + '/mean_human_aoi', aoi, global_step)
-        self.writer.add_scalar(tag_prefix + '/energy_consumption (J)', energy_consumption, global_step)
-        self.writer.add_scalar(tag_prefix + '/collected_data_amount (MB)', collected_data_amount, global_step)
-        self.writer.add_scalar(tag_prefix + '/avg user coverage', ave_human_coverage, global_step)
 
 
 

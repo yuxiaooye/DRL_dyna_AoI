@@ -17,7 +17,7 @@ class StatePredictor(nn.Module):
         self.trainable = True
         # self.graph_model = graph_model
         # self.human_motion_predictor = mlp(config.gcn.X_dim, config.model_predictive_rl.motion_predictor_dims)
-        self.mlp = mlp(157+2, [128, 128, 157]).to(device)  # TODO 157+2是硬编码的obs_dim+act_dim，输出维度157也是硬编码
+        self.mlp = mlp(config.obs_dim+config.act_dim, [128, 128, config.obs_dim]).to(device)
         self.tmp_config = BaseEnvConfig()
         self.device = device
 

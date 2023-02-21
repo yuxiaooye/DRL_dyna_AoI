@@ -63,7 +63,7 @@ def override(alg_args, run_args, input_args, env):
     if input_args.use_snrmap:
         # snr features数量， 直接shortcut到策略前一层，0代表不使用snrmap
         alg_args.agent_args.pi_args.snrmap_features = env.cell_num * env.cell_num
-        
+
         if input_args.algo=='ConvLSTM':
             alg_args.agent_args.pi_args.snrmap_features = 81
     else:
@@ -74,7 +74,7 @@ def override(alg_args, run_args, input_args, env):
         alg_args.model_batch_size = 5  # 用于训练一次model的traj数量
         alg_args.max_ep_len = 5
         alg_args.rollout_length = 20 * input_args.n_thread
-          # 测试episode的最大步长
+        # 测试episode的最大步长
         alg_args.model_buffer_size = 10
         alg_args.n_model_update = 3
         alg_args.n_model_update_warmup = 3
@@ -113,7 +113,7 @@ def override(alg_args, run_args, input_args, env):
     if input_args.user_data_amount != 0.75:
         run_args.name += f'_DataAmount={input_args.user_data_amount}'
     if input_args.dataset == 'KAIST' and input_args.update_num != 15 or \
-        input_args.dataset == 'NCSU' and input_args.update_num != 10:
+            input_args.dataset == 'NCSU' and input_args.update_num != 10:
         run_args.name += f'_UpdateNum={input_args.update_num}'
     if not input_args.fixed_range:
         run_args.name += f'_NotFixedRange'
@@ -163,12 +163,9 @@ def override(alg_args, run_args, input_args, env):
         run_args.name += f'_KNN={input_args.knn_coefficient}'
     if input_args.map_size != 6:
         run_args.name += f'_MapSize={input_args.map_size}'
-    # if not input_args.use_extended_value:
-    #     run_args.name += f'_NotUseExtendedValue'
-    # if input_args.use_mlp_model:
-    #     run_args.name += f'_MLPModel'
-    # if input_args.multi_mlp:
-    #     run_args.name += f'_MultiMLP'
+    if input_args.g2a_hops != 1:
+        run_args.name += f'_G2AHops={input_args.g2a_hops}'
+
 
     run_args.name += '_'+input_args.tag
     if not input_args.test or input_args.algo == 'Random':

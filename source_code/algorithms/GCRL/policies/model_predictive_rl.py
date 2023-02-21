@@ -33,12 +33,13 @@ class ModelPredictiveRL(Policy):
         self.device = None
 
     def configure(self, config, human_df):
+        self.config = config
         self.gamma = config.rl.gamma
         self.robot_state_dim = config.model_predictive_rl.robot_state_dim  # 4
         self.human_state_dim = config.model_predictive_rl.human_state_dim  # 4
         self.planning_depth = config.model_predictive_rl.planning_depth
         # self.do_action_clip = config.model_predictive_rl.do_action_clip
-        self.do_action_clip = False  # TODO hard-code
+        self.do_action_clip = False  # hard-code
         self.planning_width = config.model_predictive_rl.planning_width  # 2021/10/19记录 仅在action_clip_single_process和V_planning中用于裁剪动作空间
         self.share_graph_model = config.model_predictive_rl.share_graph_model
         self.human_df = human_df
@@ -121,13 +122,15 @@ class ModelPredictiveRL(Policy):
         #     return ActionXY(0, 0)
         if self.action_space is None:
             # self.action_space = build_action_space()
-            update_num = 10  # TODO hard-code
-            self.action_space = [9, update_num]
+            self.action_space = [9, self.config.update_num]
 
         probability = np.random.random()
         if self.phase == 'train' and probability < self.epsilon:  # 探索
-            acts = self.action_space[np.random.choice(len(self.action_space))]
-            acts = torch.zeros((n_thread, n_agent, 2)).long()  # TODO 只有形状对
+            # acts = torch.zeros((n_thread, n_agent, 2)).long()
+            a1 = np.random.randint(self.action_space[0], size=(n_thread, n_agent))
+            a2 = np.random.randint(self.action_space[1], size=(n_thread, n_agent))
+            acts = np.stack([a1, a2], axis=-1)
+            acts = torch.tensor(acts)
         else:  # 利用
             # --- step1. 根据是否执行动作裁剪，为action_space_clipped定值
             if self.do_action_clip:
@@ -345,5 +348,5 @@ class ModelPredictiveRL(Policy):
         #          - tmp_config.env.energy_factor * np.sum(current_enenrgy_consume)
 
         n_thread = state.shape[0]
-        reward = torch.zeros((n_thread, 1)).to(self.device)  # TODO 只有形状对
+        reward = torch.zeros((n_thread, 1)).to(self.device)  # TODO 只有形状对，先这样，没有训练痕迹再回来加
         return reward

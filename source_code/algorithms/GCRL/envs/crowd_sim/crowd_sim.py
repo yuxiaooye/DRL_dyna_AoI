@@ -38,7 +38,7 @@ def cal_dis_to_green_region(human_df):
         f.write('To green region {}:\nsorted user index:'.format(i + 1) + '\n')
         f.write(' '.join([str(index) for index in sorted_userIndex]) + '\n')
 
-        if i == 3:  # 硬编码，在绿4删除效果不好的user0
+        if i == 3:
             sorted_userIndex = np.delete(sorted_userIndex, np.where(sorted_userIndex == 0)[0].item())
 
         best_users = sorted_userIndex[:10]

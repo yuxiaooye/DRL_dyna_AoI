@@ -30,7 +30,8 @@ def parse_args():
     # parser.add_argument('--multi-mlp', action='store_true', help='在model中分开预测obs中不同类别的信息，仅用于DMPO')
     parser.add_argument('--g2a_hidden_dim', type=int, default=64, help='在model中分开预测obs中不同类别的信息，仅用于DMPO')
     parser.add_argument('--tau', type=float, default=0.01)
-    parser.add_argument('--map_size', type=int, default=6)
+    parser.add_argument('--map_size', type=int, default=6)  # hyper
+    parser.add_argument('--g2a_hops', type=int, default=1)  # hyper
 
     # tune env
     ## setting
@@ -78,9 +79,11 @@ def parse_args():
         input_args.output_dir = f'runs/random'
 
 
-    if input_args.dataset == 'NCSU':  # TODO 在NCSU的默认值
-        input_args.poi_num = 48
-        input_args.update_num = 10
+    if input_args.dataset == 'NCSU':  # 在NCSU的默认值
+        if input_args.poi_num == 116:
+            input_args.poi_num = 48
+        if input_args.update_num == 15:
+            input_args.update_num = 10
 
 
     env_args = {
