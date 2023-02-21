@@ -35,7 +35,7 @@ class EnvMobile():
         self.WEIGHTED_MODE = self.config("weighted_mode")
         self.SCALE = self.config("scale")
         self.UAV_NUM = self.config("uav_num")
-        self.INITIAL_ENERGY = env_args['initial_energy']
+        self.INITIAL_ENERGY = self.config('initial_energy')
         self.EPSILON = self.config("epsilon")
         self.ACTION_ROOT = self.config("action_root")
         self.MAX_EPISODE_STEP = self.config("max_episode_step")
@@ -128,6 +128,7 @@ class EnvMobile():
         self.good_reward_list = []
         self.aoi_penalty_reward_list = []
         self.knn_reward_list = []
+        self.energy_reward_list = []
 
         self.aoi_history = []  # 每个时间步的user平均aoi
 
@@ -135,7 +136,7 @@ class EnvMobile():
 
         # 之前把这四个元素的初始化放在init中，导致跨episode时没有被reset
         self.uav_energy = np.asarray(
-            [self.config("initial_energy") for i in range(self.UAV_NUM)],
+            [self.INITIAL_ENERGY for i in range(self.UAV_NUM)],
             dtype=np.float64)
         self.uav_position = np.asarray(
             [[self.MAP_X / 2, self.MAP_Y / 2] for _ in range(self.UAV_NUM)],
@@ -199,6 +200,8 @@ class EnvMobile():
         # poi移动
         self._human_move()
 
+        energy_rs = np.zeros(self.UAV_NUM)
+
         # uav移动
         for uav_index in range(self.UAV_NUM):
             new_x, new_y, distance, energy_consuming = self._cal_uav_next_pos(uav_index, action1[uav_index])  # 调用关键函数，uav移动
@@ -206,13 +209,15 @@ class EnvMobile():
             if not Flag:  # 如果出界，就不更新uav的位置
                 self.uav_position[uav_index] = (new_x, new_y)
             self.uav_trace[uav_index].append(self.uav_position[uav_index].tolist())  # 维护uav_trace
-            self._use_energy(uav_index, energy_consuming)
+            self._use_energy(uav_index, energy_consuming)  # TODO 这个要体现在罚项中
+            energy_rs[uav_index] -= energy_consuming / self.INITIAL_ENERGY  # 总能量
 
         # uav收集
         ## 确定uav的服务对象，元素是（poi_id，data rate，dis）三元组
         access_lists = self._uavs_access_users(action2)
         for uav_index in range(self.UAV_NUM):
-            self._use_energy(uav_index, len(access_lists[uav_index]) * 10)  # 服务每个用户带来10J消耗
+            self._use_energy(uav_index, len(access_lists[uav_index]) * 10)  # 服务每个用户带来10J消耗  # TODO 这个要体现在罚项中
+            energy_rs[uav_index] -= len(access_lists[uav_index]) * 10 / self.INITIAL_ENERGY
 
         ## 计算各poi的总data rate
         sum_rates = np.zeros(self.POI_NUM)
@@ -247,8 +252,9 @@ class EnvMobile():
                         uav_rewards[uav_id] += r
                         rate_contribute_to_that_poi[uav_id] = rate
 
-            self.good_reward_list.extend(uav_rewards)
-            # if self.debug: print(uav_rewards)
+        self.good_reward_list.extend(uav_rewards)
+        self.energy_reward_list.extend(energy_rs)
+        uav_rewards -= energy_rs  # 尺度大概在-0.003所以不用乘scale
 
 
         if self.KNN_COEFFCICENT > -1:
@@ -324,6 +330,7 @@ class EnvMobile():
         info['good_reward'] = np.mean(self.good_reward_list)
         info['aoi_penalty_reward'] = np.mean(self.aoi_penalty_reward_list) if len(self.aoi_penalty_reward_list) != 0 else 0
         info['knn_reward'] = np.mean(self.knn_reward_list) if len(self.knn_reward_list) != 0 else 0
+        info['energy_reward'] = np.mean(self.energy_reward_list) if len(self.energy_reward_list) != 0 else 0
 
 
         if self.debug: print(info)
@@ -551,7 +558,7 @@ class EnvMobile():
                 else:
                     snrmap[i][j] += self.poi_aoi[poi_index] / self.MAX_EPISODE_STEP
 
-        snrmap = snrmap / self.POI_NUM  # 归一化
+        # snrmap = snrmap / self.POI_NUM  # 归一化 0221晚上删除 平均值只有0.01左右太小
         snrmap = snrmap.reshape(self.cell_num * self.cell_num, )
         return snrmap.tolist()
 
