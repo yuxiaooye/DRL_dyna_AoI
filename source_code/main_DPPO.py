@@ -152,7 +152,8 @@ def override(alg_args, run_args, input_args, env):
         run_args.name += f'_G2AHiddenDim={input_args.g2a_hidden_dim}'
     if input_args.tau != 0.01:
         run_args.name += f'_TAU={input_args.tau}'
-    if input_args.knn_coefficient != -1:
+    if input_args.dataset == 'KAIST' and input_args.knn_coefficient != 0.5 or \
+            input_args.dataset == 'NCSU' and input_args.knn_coefficient != 0.1:
         run_args.name += f'_KNN={input_args.knn_coefficient}'
     if input_args.map_size != 6:
         run_args.name += f'_MapSize={input_args.map_size}'
