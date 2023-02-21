@@ -13,6 +13,7 @@ import json
 import copy
 from algorithms.utils import Config, LogClient, LogServer, mem_report
 from algorithms.algo.main import OnPolicyRunner
+from algorithms.algo.random_runner import RandomRunner
 
 os.environ['MKL_SERVICE_FORCE_INTEL'] = '1'
 import argparse
@@ -43,10 +44,12 @@ def getRunArgs(input_args):
 def getAlgArgs(run_args, input_args, env):
     assert input_args.env.startswith('Mobile')
     assert input_args.algo in ['DPPO', 'CPPO', 'IPPO', 'DMPO',
-                               'IC3Net', 'IA2C', 'G2ANet', 'G2ANe2','ConvLSTM']
+                               'IC3Net', 'IA2C', 'G2ANet', 'G2ANe2','ConvLSTM', 'Random']
     filename = input_args.algo
     if filename == 'G2ANet2':
         filename = 'G2ANet'
+    if filename == 'Random':
+        filename = 'DPPO'
     config = importlib.import_module(f"algorithms.config.Mobile_{filename}")
     alg_args = config.getArgs(run_args.radius_v, run_args.radius_pi, env, input_args=input_args)
     return alg_args
@@ -66,6 +69,7 @@ def override(alg_args, run_args, input_args, env):
     else:
         alg_args.agent_args.pi_args.snrmap_features = 0
 
+
     if run_args.debug:
         alg_args.model_batch_size = 5  # 用于训练一次model的traj数量
         alg_args.max_ep_len = 5
@@ -81,13 +85,16 @@ def override(alg_args, run_args, input_args, env):
         alg_args.n_test = 1
         alg_args.n_traj = 4
         alg_args.n_inner_iter = 2
-    if run_args.test:  # here it's what I want!
+    if run_args.test:
         run_args.debug = True
         alg_args.n_warmup = 0
         alg_args.n_test = 10
     if run_args.seed is None:
         # 固定随机种子
         run_args.seed = 1
+
+    if input_args.algo == 'Random':
+        alg_args.n_test = 1
 
     '''yyx add begin'''
     timenow = datetime.strftime(datetime.now(), "%Y-%m-%d_%H-%M-%S")
@@ -164,7 +171,7 @@ def override(alg_args, run_args, input_args, env):
     #     run_args.name += f'_MultiMLP'
 
     run_args.name += '_'+input_args.tag
-    if not input_args.test:
+    if not input_args.test or input_args.algo == 'Random':
         final = '../{}/{}'.format(input_args.output_dir, run_args.name)
         run_args.output_dir = final
         input_args.output_dir = final
@@ -212,6 +219,8 @@ elif input_args.algo == 'IPPO':
     from algorithms.algo.agent.IPPO import IPPOAgent as agent_fn
 elif input_args.algo =='ConvLSTM':
     from algorithms.algo.agent.ConvLSTM import ConvLSTMAgent as agent_fn
+elif input_args.algo =='Random':
+    from algorithms.algo.agent.Random import RandomAgent as agent_fn
 
 if input_args.env == 'Mobile':
     from envs.env_mobile import EnvMobile
@@ -227,8 +236,7 @@ print('test =', run_args.test)
 dummy_env = env_fn_train(env_args, input_args, phase='dummy')
 alg_args = getAlgArgs(run_args, input_args, dummy_env)
 alg_args, run_args, input_args = override(alg_args, run_args, input_args, dummy_env)
-if not input_args.test:
-    record_input_args(input_args, env_args, run_args.output_dir)
+record_input_args(input_args, env_args, run_args.output_dir)
 
 from env_configs.wrappers.env_wrappers import SubprocVecEnv
 envs_train = SubprocVecEnv([env_fn_train(env_args, input_args, phase='train') for _ in range(input_args.n_thread)])
@@ -244,7 +252,11 @@ agent = initAgent(logger, run_args.device, alg_args.agent_args, input_args)
 import time
 
 start = time.time()
-OnPolicyRunner(logger=logger, agent=agent, envs_learn=envs_train, envs_test=envs_test, dummy_env=dummy_env,
+if input_args.algo =='Random':
+    runner_fn = RandomRunner
+else:
+    runner_fn = OnPolicyRunner
+runner_fn(logger=logger, agent=agent, envs_learn=envs_train, envs_test=envs_test, dummy_env=dummy_env,
                run_args=run_args, alg_args=alg_args, input_args=input_args).run()
 end = time.time()
 print(f'OK! 用时{end - start}秒')

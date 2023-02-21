@@ -8,7 +8,7 @@ def parse_args():
     parser.add_argument('--test', action='store_true', default=False, )
     parser.add_argument('--user', type=str, default='yyx')
     parser.add_argument('--env', type=str, default='Mobile')
-    parser.add_argument('--algo', type=str, required=False, default='IPPO', help="algorithm(DMPO/IC3Net/CPPO/DPPO/IA2C/IPPO) ")
+    parser.add_argument('--algo', type=str, required=False, default='IPPO', help="algorithm(G2ANet/IC3Net/CPPO/DPPO/IA2C/IPPO/Random) ")
     parser.add_argument('--device', type=str, required=False, default='cuda:0', help="device(cpu/cuda:0/cuda:1/...) ")
     parser.add_argument("--dataset", type=str, default='NCSU', choices=['NCSU', 'KAIST', 'purdue'])
     parser.add_argument("--poi_num", type=int, default=116)  # KAIST
@@ -61,6 +61,10 @@ def parse_args():
     # if input_args.multi_mlp:
     #     assert input_args.use_mlp_model
 
+    if input_args.algo == 'Random':
+        input_args.test = True
+        input_args.debug = False
+
     if input_args.debug:
         input_args.group = 'debug'
     input_args.output_dir = f'runs/{input_args.group}'
@@ -69,6 +73,10 @@ def parse_args():
         input_args.group = 'test'
         input_args.n_thread = 1
         input_args.output_dir = f'{input_args.checkpoint}/test'
+
+    if input_args.algo == 'Random':
+        input_args.output_dir = f'runs/random'
+
 
     if input_args.dataset == 'NCSU':  # TODO 在NCSU的默认值
         input_args.poi_num = 48
