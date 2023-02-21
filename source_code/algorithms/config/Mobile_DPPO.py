@@ -10,8 +10,7 @@ from algorithms.utils import Config
 def getArgs(radius_v, radius_pi, env, input_args):
 
     alg_args = Config()
-    # 总训练步数 = n_iter * rollout_length，默认25K * 0.6K = 15M
-    # 改为5K * 0.6K = 6M
+    # 总训练步数 = n_iter * rollout_length，默认5K * 0.6K = 3M
     alg_args.n_iter = 5000  # 25000
     alg_args.n_inner_iter = 1
     alg_args.n_warmup = 0

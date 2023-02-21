@@ -69,9 +69,7 @@ class Config(object):
             "w_noise": -104,
             "RATE_THRESHOLD": 5,  # 关键 Mbps
             "AoI_THRESHOLD": 60,  # 关键
-            "bonus_reward_ratio": 0.0,  # 这个ratio就算要设，也必须比penalty ratio小很多，因为他俩本身的尺度不一样
             "aoi_vio_penalty_scale": 0.2,
-            "tx_vio_penalty_scale": 0.2,
             "hao02191630": True
         }
 

@@ -51,8 +51,6 @@ class EnvMobile():
         self.RATE_THRESHOLD = self.config("RATE_THRESHOLD")
         self.AoI_THRESHOLD = self.config("AoI_THRESHOLD")
         self.aoi_vio_penalty_scale = self.config("aoi_vio_penalty_scale")
-        self.tx_vio_penalty_scale = self.config("tx_vio_penalty_scale")
-        self.bonus_reward_ratio = self.config("bonus_reward_ratio")
         self.UPDATE_USER_NUM = self.config("update_user_num")
         self.USER_DATA_AMOUNT = self.config("user_data_amount")
         self.UAV_HEIGHT = self.config("uav_height")
@@ -129,8 +127,7 @@ class EnvMobile():
         # 监视下面几个reward乘上ratio之前的尺度
         self.good_reward_list = []
         self.aoi_penalty_reward_list = []
-        self.tx_penalty_reward_list = []
-        self.soft_tx_satis_ratio_list = []
+        self.knn_reward_list = []
 
         self.aoi_history = []  # 每个时间步的user平均aoi
 
@@ -261,6 +258,7 @@ class EnvMobile():
             intrinsic_reward = np.mean(d_map[:10]) / 1000 * self.KNN_COEFFCICENT if len(d_map) > 0 else 0
             # print("{},{}".format(uav_rewards[uav_index],intrinsic_reward))
             uav_rewards[uav_index] += intrinsic_reward
+            self.knn_reward_list.append(intrinsic_reward / self.KNN_COEFFCICENT)
 
         done = self._is_episode_done()
         if not done:
@@ -311,9 +309,7 @@ class EnvMobile():
         episodic_aoi = np.mean(self.aoi_history)
         aoi_satis_ratio = sum(1 - np.array(self.aoi_vio_ratio_list)) / self.step_count
         data_satis_ratio = 1 - sum(self.poi_aoi) / (self.POI_NUM * self.MAX_EPISODE_STEP)
-        # tx_satis_ratio = sum(self.tx_satis_ratio_list) / len(self.tx_satis_ratio_list)
-        # soft_tx_satis_ratio = sum(self.soft_tx_satis_ratio_list) / len(self.soft_tx_satis_ratio_list)
-        # energy_consuming_ratio = t_e / (self.UAV_NUM * self.INITIAL_ENERGY)
+
         info['episodic_aoi'] = episodic_aoi
         info['aoi_satis_ratio'] = aoi_satis_ratio
         info['data_satis_ratio'] = data_satis_ratio
@@ -324,7 +320,8 @@ class EnvMobile():
         info['QoI'] = min(aoi_satis_ratio, data_satis_ratio) / (t_e / self.UAV_NUM / 10 ** 6)
         info['good_reward'] = np.mean(self.good_reward_list)
         info['aoi_penalty_reward'] = np.mean(self.aoi_penalty_reward_list) if len(self.aoi_penalty_reward_list) != 0 else 0
-        # info['tx_penalty_reward'] = np.mean(self.tx_penalty_reward_list) if len(self.tx_penalty_reward_list) != 0 else 0
+        info['knn_reward'] = np.mean(self.knn_reward_list) if len(self.knn_reward_list) != 0 else 0
+
 
         if self.debug: print(info)
 
@@ -614,16 +611,18 @@ class EnvMobile():
         plt.hist(data, bins=20, rwidth=0.8)
         plt.show()
 
-    def save_trajs_2(self, best_trajs, poi_aoi_history, serves, total_steps=1,
+    def save_trajs_2(self, best_trajs, poi_aoi_history, serves, iter=None,
                      phase='train', is_newbest=False):
 
-        postfix = 'best' if is_newbest else str(total_steps)
+        postfix = 'best' if is_newbest else str(iter)
         save_traj_dir = osp.join(self.input_args.output_dir, f'{phase}_saved_trajs')
         if not osp.exists(save_traj_dir): os.makedirs(save_traj_dir)
         np.savez(osp.join(save_traj_dir, f'eps_{postfix}.npz'), best_trajs)
         np.savez(osp.join(save_traj_dir, f'eps_{postfix}_aoi.npz'), poi_aoi_history)
         np.savez(osp.join(save_traj_dir, f'eps_{postfix}_serve.npz'), serves)
 
-        if is_newbest:
-            from tools.post.vis import render_HTML
-            render_HTML(self.input_args.output_dir, tag=phase)
+        from tools.post.vis import render_HTML
+        render_HTML(self.input_args.output_dir,
+                    tag=phase, iter=iter, best=is_newbest)
+
+

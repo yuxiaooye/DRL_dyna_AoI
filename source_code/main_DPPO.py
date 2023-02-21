@@ -95,26 +95,27 @@ def override(alg_args, run_args, input_args, env):
 
     # tune env
     ## setting
+    if input_args.uav_num != 3:
+        run_args.name += f'_UAVNum={input_args.uav_num}'
     if input_args.collect_range != 500:
         run_args.name += f'_SNR={input_args.collect_range}'
     if input_args.dyna_level != '2':
         run_args.name += f'_DynaLevel={input_args.dyna_level}'
     if input_args.init_energy != 719280:
         run_args.name += f'_InitEnergy={input_args.init_energy}'
-    if input_args.user_data_amount != 1:
+    if input_args.user_data_amount != 0.75:
         run_args.name += f'_DataAmount={input_args.user_data_amount}'
     if input_args.dataset == 'KAIST' and input_args.update_num != 15 or \
         input_args.dataset == 'NCSU' and input_args.update_num != 10:
         run_args.name += f'_UpdateNum={input_args.update_num}'
     if not input_args.fixed_range:
         run_args.name += f'_NotFixedRange'
-    if input_args.uav_num != 3:
-        run_args.name += f'_UAVNum={input_args.uav_num}'
+
     if not input_args.fixed_col_time:
         run_args.name += f'_NotFixedColTime'
     if input_args.aoith != 60:
         run_args.name += f'_AoIth={input_args.aoith}'
-    if input_args.txth != 5:
+    if input_args.txth != 3:
         run_args.name += f'_TXth={input_args.txth}'
     if input_args.uav_height != 100:
         run_args.name += f'_UAVHeight={input_args.uav_height}'
@@ -122,7 +123,7 @@ def override(alg_args, run_args, input_args, env):
         run_args.name += f'_Users={input_args.poi_num}'
     if not input_args.hao02191630:
         run_args.name += f'_Nothao02191630'
-    if input_args.w_noise != -104:
+    if input_args.w_noise != -110:
         run_args.name += f'_NOISE={input_args.w_noise}'
     if input_args.agent_field != 750:
         run_args.name += f'_FIELD={input_args.agent_field}'

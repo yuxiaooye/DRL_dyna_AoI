@@ -38,13 +38,13 @@ def parse_args():
     parser.add_argument('--collect_range', type=float, default=500)
     parser.add_argument('--dyna_level', type=str, default='2', help='指明读取不同难度的poi_QoS.npy')
     parser.add_argument('--init_energy', type=float, default=719280)
-    parser.add_argument('--w_noise', type=float, default=-104)
-    parser.add_argument('--user_data_amount', type=float, default=1)
+    parser.add_argument('--w_noise', type=float, default=-110)
+    parser.add_argument('--user_data_amount', type=float, default=0.75)
     parser.add_argument('--update_num', type=int, default=15)
     parser.add_argument('--uav_num', type=int, default=3)
     parser.add_argument('--fixed-col-time', action='store_false')
     parser.add_argument('--aoith', default=60, type=int)
-    parser.add_argument('--txth', default=5, type=int)
+    parser.add_argument('--txth', default=3, type=int)
     parser.add_argument('--uav_height', default=100, type=int)
     parser.add_argument('--knn_coefficient', default=-1, type=float,help='knn奖励系数')
     parser.add_argument('--hao02191630', action='store_false')
@@ -73,8 +73,7 @@ def parse_args():
     if input_args.dataset == 'NCSU' and input_args.update_num == 15:
         input_args.update_num = 10  # 在NCSU的默认值调小
 
-    env_args = {  # 这里环境类的参数抄昊宝
-        "emergency_threshold": 100,
+    env_args = {
         "max_episode_step": input_args.max_episode_step,
         "collect_range": input_args.collect_range,
         "initial_energy": input_args.init_energy,
@@ -85,7 +84,6 @@ def parse_args():
         "RATE_THRESHOLD": input_args.txth,
         "uav_height": input_args.uav_height,
         "aoi_vio_penalty_scale": input_args.aVPS,
-        "tx_vio_penalty_scale": input_args.tVPS,
         "hao02191630": input_args.hao02191630,
         "w_noise": input_args.w_noise,
         "agent_field": input_args.agent_field,

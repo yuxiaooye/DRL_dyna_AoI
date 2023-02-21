@@ -55,7 +55,7 @@ class OnPolicyRunner:
         self.device = self.agent.device if hasattr(self.agent, "device") else "cpu"
 
         if run_args.checkpoint is not None:  # not train from scratch
-            self.agent.load_nets(run_args.checkpoint)
+            self.agent.load_nets(run_args.checkpoint, best=True)
             logger.log(interaction=run_args.start_step)
         self.start_step = run_args.start_step
         self.env_name = input_args.env
@@ -114,23 +114,25 @@ class OnPolicyRunner:
             self.test()
             return
 
+        self.routine_count = 0
+        self.rr = 0
         for iter in trange(self.n_iter, desc='rollout env'):
             if iter % 50 == 0:
                 self.test()
             if iter % 1000 == 0:
-                self.agent.save_nets(dir_name=self.run_args.output_dir, iter=iter)
+                self.agent.save_nets(dir_name=self.run_args.output_dir, iter=iter)  # routine
 
-            trajs = self.rollout_env()  # model-based三部曲之一
+            trajs = self.rollout_env(iter)
             if self.model_based:
                 self.model_buffer.storeTrajs(trajs)
                 if iter % 10 == 0:
-                    self.updateModel()  # model-based三部曲之二
+                    self.updateModel()
 
             agentInfo = []
             for inner in trange(self.n_inner_iter, desc='inner-iter updateAgent'):
                 if self.model_based and np.random.uniform() < self.model_prob:  # Use the model with a certain probability
                     trajs = self.rollout_model(trajs)
-                info = self.agent.updateAgent(trajs)  # model-based三部曲之三
+                info = self.agent.updateAgent(trajs)
                 agentInfo.append(info)
                 if self.agent.checkConverged(agentInfo):
                     break
@@ -149,8 +151,12 @@ class OnPolicyRunner:
             while not done:  # 测试时限定一个episode最大为length步
                 s = envs.get_obs_from_outside()
                 a = self.agent.act(s)  # shape = (-1, 3)
-                action1 = a['branch1'].sample()
-                action2 = a['branch2'].sample()
+                # TODO 0221凌晨
+                # action1 = a['branch1'].sample()
+                # action2 = a['branch2'].sample()
+                action1 = a['branch1'].probs.argmax(dim=-1)
+                action2 = a['branch2'].probs.argmax(dim=-1)
+
                 a = torch.stack([action1, action2], dim=-1)
                 # if len(a.shape) == 2 and a.shape[0] == 1:  # for IA2C and IC3Net 注意：向量环境下这个需要改！
                 #     a = a.squeeze(0)
@@ -167,9 +173,8 @@ class OnPolicyRunner:
                 poi_aoi_history = self.envs_test.get_poi_aoi_history()
                 serves = self.envs_learn.get_serves()
                 write_output(envs_info[max_id], self.run_args.output_dir, tag='test')
-                if not self.input_args.test:
-                    self.dummy_env.save_trajs_2(
-                        best_eval_trajs[max_id], poi_aoi_history[max_id], serves[max_id], phase='test', is_newbest=True)
+                self.dummy_env.save_trajs_2(
+                    best_eval_trajs[max_id], poi_aoi_history[max_id], serves[max_id], phase='test', is_newbest=True)
             returns += [ep_ret.sum()]
             lengths += [ep_len]
         returns = np.stack(returns, axis=0)
@@ -181,10 +186,13 @@ class OnPolicyRunner:
         print(f"{self.n_test} episodes average accumulated reward: {average_ret}")
         return average_ret
 
-    def rollout_env(self):  # 与环境交互得到trajs
+    def rollout_env(self, iter):  # 与环境交互得到trajs
         """
         The environment should return sth like [n_agent, dim] or [batch_size, n_agent, dim] in either numpy or torch.
         """
+        self.routine_count += 1
+
+
         trajBuffer = TrajectoryBuffer(device=self.device)
         envs = self.envs_learn
         for t in range(int(self.rollout_length / self.input_args.n_thread)):  # 加入向量环境后，控制总训练步数不变
@@ -231,17 +239,27 @@ class OnPolicyRunner:
                     self.dummy_env.save_trajs_2(
                         best_train_trajs[max_id], poi_aoi_history[max_id], serves[max_id], phase='train', is_newbest=True)
 
+                if self.routine_count // 500 > 0:  # routinely vis (OK)
+                    max_id = ep_r.argmax()
+                    best_train_trajs = self.envs_learn.get_saved_trajs()
+                    poi_aoi_history = self.envs_learn.get_poi_aoi_history()
+                    serves = self.envs_learn.get_serves()
+                    self.dummy_env.save_trajs_2(
+                        best_train_trajs[max_id], poi_aoi_history[max_id], serves[max_id],
+                        iter=self.rr*500, phase='train')
+
+                    self.rr += self.routine_count // 500
+                    self.routine_count = self.routine_count % 500
+
+
                 self.logger.log(QoI=sum(d['QoI'] for d in env_info) / len(env_info),
                                 episodic_aoi=sum(d['episodic_aoi'] for d in env_info) / len(env_info),
                                 aoi_satis_ratio=sum(d['aoi_satis_ratio'] for d in env_info) / len(env_info),
                                 data_satis_ratio=sum(d['data_satis_ratio'] for d in env_info) / len(env_info),
-                                # tx_satis_ratio=sum(d['tx_satis_ratio'] for d in env_info) / len(env_info),
-                                # soft_tx_satis_ratio=sum(d['soft_tx_satis_ratio'] for d in env_info) / len(env_info),
                                 energy_consuming=sum(d['energy_consuming'] for d in env_info) / len(env_info),
-                                # energy_consuming_ratio=sum(d['energy_consuming_ratio'] for d in env_info) / len(env_info),
                                 good_reward=sum(d['good_reward'] for d in env_info) / len(env_info),
                                 aoi_penalty_reward=sum(d['aoi_penalty_reward'] for d in env_info) / len(env_info),
-                                # tx_penalty_reward=sum(d['tx_penalty_reward'] for d in env_info) / len(env_info),
+                                knn_reward=sum(d['knn_reward'] for d in env_info) / len(env_info),
                                 )
                 '''执行env的reset'''
                 try:

@@ -21,7 +21,9 @@ sys.path.append(os.getcwd())
 from env_configs.roadmap_env.roadmap_utils import *
 
 
-def render_HTML(output_dir, tag='train', debug=False):
+def render_HTML(output_dir, tag='train', iter=None, best=False, debug=False):
+    assert (iter is not None and not best) or (iter is None and best)
+
     '''从params.json中拿到训练时参数'''
     json_file = osp.join(output_dir, 'params.json')
     with open(json_file, 'r') as f:
@@ -76,8 +78,8 @@ def render_HTML(output_dir, tag='train', debug=False):
         'uav1': '#%02X%02X%02X' % (95, 158, 160),  #
         'uav2': '#%02X%02X%02X' % (130, 43, 226),  #
         'uav3': '#%02X%02X%02X' % (0, 0, 255),  # blue
-        'uav4': '#%02X%02X%02X' % (0, 0, 255),  # blue
-        'uav5': '#%02X%02X%02X' % (0, 0, 255),  # blue
+        'uav4': '#%02X%02X%02X' % (139, 105, 20),
+        'uav5': '#%02X%02X%02X' % (255, 165, 0),
         'uav6': '#%02X%02X%02X' % (0, 0, 255),  # blue
         'uav7': '#%02X%02X%02X' % (0, 0, 255),  # blue
         'uav8': '#%02X%02X%02X' % (0, 0, 255),  # blue
@@ -184,10 +186,11 @@ def render_HTML(output_dir, tag='train', debug=False):
     folium.LayerControl().add_to(map)
 
     # save
-    if debug:
-        save_file = os.path.join(output_dir, f'vis_{tag}_debug.html')
-    else:
-        save_file = os.path.join(output_dir, f'vis_{tag}.html')
+    str_iter = f'_{iter}' if iter is not None else ''
+    str_best = '_best' if best else ''
+    str_debug = '_debug' if debug else ''
+    save_file = os.path.join(output_dir, f'vis_{tag}{str_iter}{str_best}{str_debug}.html')
+
     map.get_root().save(save_file)
 
     print('OK!')
@@ -203,5 +206,6 @@ if __name__ == '__main__':
     render_HTML(
         args.output_dir,
         tag=args.tag,
-        debug=args.debug
+        debug=args.debug,
+        best=True,
     )

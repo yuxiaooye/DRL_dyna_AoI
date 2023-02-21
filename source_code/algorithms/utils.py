@@ -459,7 +459,7 @@ class LogServer(object):
             wandb.login(key=key)  # login to my own account first
             run = wandb.init(
                 entity=entity,
-                project = input_args.env,
+                project=input_args.env,
                 config={"run_args": run_args._toDict(recursive=True),
                         "algo_args": algo_args._toDict(recursive=True),
                         "input_args": vars(input_args),

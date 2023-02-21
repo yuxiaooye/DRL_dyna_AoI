@@ -1,7 +1,9 @@
 # !/bin/sh
 source activate yyx_ishen
-group='0220-snr500'
-nohup python -u main_DPPO.py --group $group --poi_num 50 --agent_field 750 --txth 1 --user_data_amount 0.75 --w_noise -110 --algo G2ANet --use_snrmap --knn_coefficient 0.25 --user yyx --device cuda:2 &
-nohup python -u main_DPPO.py --group $group --poi_num 50 --agent_field 750 --txth 3 --user_data_amount 0.75 --w_noise -110 --algo G2ANet --use_snrmap --knn_coefficient 0.25 --user yyx --device cuda:2 &
-nohup python -u main_DPPO.py --group $group --poi_num 50 --agent_field 750 --txth 1 --user_data_amount 0.75 --w_noise -110 --algo G2ANet --use_snrmap --knn_coefficient 0.5 --user yyx --device cuda:2 &
-nohup python -u main_DPPO.py --group $group --poi_num 50 --agent_field 750 --txth 3 --user_data_amount 0.75 --w_noise -110 --algo G2ANet --use_snrmap --knn_coefficient 0.5 --user yyx --device cuda:2 &
+group='0221-for-lower-aoi-1'
+for uav_num in 3 4 5;
+do
+nohup python -u main_DPPO.py --mute_wandb --group $group --dataset NCSU --poi_num 48 --uav_num $uav_num --aoith 45 --algo G2ANet --use_snrmap --knn_coefficient 0.25 --user yyx --device cuda:0 &
+nohup python -u main_DPPO.py --mute_wandb --group $group --dataset NCSU --poi_num 48 --uav_num $uav_num --aoith 30 --algo G2ANet --use_snrmap --knn_coefficient 0.25 --user yyx --device cuda:1 &
+nohup python -u main_DPPO.py --mute_wandb --group $group --dataset NCSU --poi_num 48 --uav_num $uav_num --aoith 15 --algo G2ANet --use_snrmap --knn_coefficient 0.25 --user yyx --device cuda:2 &
+done

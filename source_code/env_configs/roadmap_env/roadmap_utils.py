@@ -136,8 +136,11 @@ def traj_to_timestamped_geojson(index, trajectory, rm, uav_num, color,
                     "opacity": opacity
                 },
                 "code": 11,
-                'popup': f"User{index-uav_num}\n"
-                         f"AoI={aois[i][index-uav_num]}",
+                'popup': rf"<a class='image-link' href=C:/Users/Administrator/Desktop/1.png>Open popup</a>",
+                # 'popup': f"User{index-uav_num}\n"
+                #          f"AoI={aois[i][index-uav_num]}",
+
+
             },
         }
         features.append(feature1)
