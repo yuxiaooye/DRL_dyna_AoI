@@ -543,7 +543,10 @@ class EnvMobile():
             i = np.clip(int(x / self.cell_span_x), 0, self.cell_num - 1)
             j = np.clip(int(y / self.cell_span_y), 0, self.cell_num - 1)
             if visible[i][j]:
-                snrmap[i][j] += 1  # 根据用户位置把ans加到具体的cell中
+                if self.poi_aoi[poi_index] > self.AoI_THRESHOLD:
+                    snrmap[i][j] += 1
+                else:
+                    snrmap[i][j] += self.poi_aoi[poi_index] / self.MAX_EPISODE_STEP
 
         snrmap = snrmap / self.POI_NUM  # 归一化
         snrmap = snrmap.reshape(self.cell_num * self.cell_num, )

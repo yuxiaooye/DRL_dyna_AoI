@@ -151,7 +151,7 @@ class OnPolicyRunner:
             while not done:  # 测试时限定一个episode最大为length步
                 s = envs.get_obs_from_outside()
                 a = self.agent.act(s)  # shape = (-1, 3)
-                # TODO 0221凌晨
+                # 0221凌晨test改为取概率最大动作
                 # action1 = a['branch1'].sample()
                 # action2 = a['branch2'].sample()
                 action1 = a['branch1'].probs.argmax(dim=-1)

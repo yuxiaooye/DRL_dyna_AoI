@@ -57,6 +57,7 @@ class Roadmap():
         for id in range(1, poi_num):
             subDf = poi_df[poi_df['id'] == id]
             poi_mat = np.concatenate((poi_mat, np.expand_dims(subDf.values[:, -2:], axis=0)), axis=0)
+
         return poi_mat  # shape = (33, 121, 2) 意为33个poi在121个时间步的坐标信息
 
     def lonlat2pygamexy(self, lon, lat):
@@ -136,11 +137,8 @@ def traj_to_timestamped_geojson(index, trajectory, rm, uav_num, color,
                     "opacity": opacity
                 },
                 "code": 11,
-                'popup': rf"<a class='image-link' href=C:/Users/Administrator/Desktop/1.png>Open popup</a>",
-                # 'popup': f"User{index-uav_num}\n"
-                #          f"AoI={aois[i][index-uav_num]}",
-
-
+                'popup': "<a class='image-link' href=C:/Users/Administrator/Desktop/1.png>Open popup</a>"
+                         f"<p> User{index-uav_num}\nAoI={aois[i][index-uav_num]}</p>",
             },
         }
         features.append(feature1)

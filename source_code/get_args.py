@@ -11,7 +11,7 @@ def parse_args():
     parser.add_argument('--algo', type=str, required=False, default='IPPO', help="algorithm(DMPO/IC3Net/CPPO/DPPO/IA2C/IPPO) ")
     parser.add_argument('--device', type=str, required=False, default='cuda:0', help="device(cpu/cuda:0/cuda:1/...) ")
     parser.add_argument("--dataset", type=str, default='NCSU', choices=['NCSU', 'KAIST', 'purdue'])
-    parser.add_argument("--poi_num", type=int, default=None)
+    parser.add_argument("--poi_num", type=int, default=116)  # KAIST
     parser.add_argument("--tag", type=str, default='', help='每个单独实验的备注')
     # dirs
     parser.add_argument("--output_dir", type=str, default='runs/debug', help="which fold to save under 'runs/'")
@@ -40,7 +40,7 @@ def parse_args():
     parser.add_argument('--init_energy', type=float, default=719280)
     parser.add_argument('--w_noise', type=float, default=-110)
     parser.add_argument('--user_data_amount', type=float, default=0.75)
-    parser.add_argument('--update_num', type=int, default=15)
+    parser.add_argument('--update_num', type=int, default=15)  # KAIST
     parser.add_argument('--uav_num', type=int, default=3)
     parser.add_argument('--fixed-col-time', action='store_false')
     parser.add_argument('--aoith', default=60, type=int)
@@ -70,8 +70,10 @@ def parse_args():
         input_args.n_thread = 1
         input_args.output_dir = f'{input_args.checkpoint}/test'
 
-    if input_args.dataset == 'NCSU' and input_args.update_num == 15:
-        input_args.update_num = 10  # 在NCSU的默认值调小
+    if input_args.dataset == 'NCSU':  # TODO 在NCSU的默认值
+        input_args.poi_num = 48
+        input_args.update_num = 10
+
 
     env_args = {
         "max_episode_step": input_args.max_episode_step,
