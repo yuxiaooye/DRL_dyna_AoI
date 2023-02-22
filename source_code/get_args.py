@@ -42,7 +42,7 @@ def parse_args():
     parser.add_argument('--init_energy', type=float, default=719280)
     parser.add_argument('--w_noise', type=float, default=-107)  # 0222morning determined
     parser.add_argument('--user_data_amount', type=float, default=0.75)
-    parser.add_argument('--update_num', type=int, default=15)  # KAIST
+    parser.add_argument('--update_num', type=int, default=10)  # 两个数据集统一将default设为10
     parser.add_argument('--uav_num', type=int, default=5)
     parser.add_argument('--fixed-col-time', action='store_false')
     parser.add_argument('--aoith', default=30, type=int)  # 0222morning determined
@@ -83,9 +83,6 @@ def parse_args():
     if input_args.dataset == 'NCSU':  # 在NCSU的默认值
         if input_args.poi_num == 116:
             input_args.poi_num = 48
-        if input_args.update_num == 15:
-            input_args.update_num = 10
-
 
     env_args = {
         "max_episode_step": input_args.max_episode_step,

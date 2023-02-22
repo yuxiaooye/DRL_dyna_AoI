@@ -207,6 +207,7 @@ class OnPolicyRunner:
                 logp.append(logp_tmp)
             a = torch.stack(a, dim=-1)
             logp = torch.stack(logp, dim=-1)
+            # TODO NEXT
             # if len(a.shape) == 2 and a.shape[0] == 1:  # for IA2C and IC3Net  # 注意：向量环境下要改~ a.shape[0]已经不是IA2C和IC3Net会额外添加的batch的维度了，我猜需要维度从0改成1
             #     a = a.squeeze(0)
             #     logp = logp.squeeze(0)

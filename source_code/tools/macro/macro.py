@@ -6,13 +6,13 @@ HT_INDEX1 = ['EoiCoef=0.001', 'EoiCoef=0.003', 'EoiCoef=0.01', 'EoiCoef=0.03']
 HT_INDEX2 = ['w/o SL, w/o CC', 'w/ SL, w/o CC', 'w/o SL, w/ CC', 'w/ SL, w/ CC']
 
 # FIVE
-FIVE_UN_INDEX = ['NU=2', 'NU=3', 'NU=4', 'NU=5']
+FIVE_UN_INDEX = [2, 3, 4, 5]
 FIVE_AT_INDEX = [10, 20, 30, 40, 50]
-FIVE_TT_INDEX = ['TXth=1', 'TXth=3', 'TXth=5', 'TXth=7', 'TXth=9']
-FIVE_UPN_INDEX = ['UH=4', 'UH=7', 'UH=10', 'UH=13', 'UH=16']
+FIVE_TT_INDEX = [1, 3, 5, 7, 9]
+FIVE_UPN_INDEX = [4, 7, 10, 13, 16]
 
 
-ALGOS = ['G2ANetAgent', 'DPPOAgent']  # TODO
+ALGOS = ['G2ANet', 'DPPO', 'CPPO']  # TODO
 
 
 yrange_for_metrics = {

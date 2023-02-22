@@ -99,23 +99,23 @@ def gen_hyper_tune_csv():
 '''生成five表格'''
 def gen_five_csv():
     if args.group_dir.endswith('uavnum'):
-        index = FIVE_UN_INDEX
-        key = 'uavnum'
+        x_index = FIVE_UN_INDEX
+        key = 'uav_num'
     elif args.group_dir.endswith('aoith'):
-        index = FIVE_AT_INDEX
+        x_index = FIVE_AT_INDEX
         key = 'aoith'
     elif args.group_dir.endswith('txth'):
-        index = FIVE_TT_INDEX
+        x_index = FIVE_TT_INDEX
         key = 'txth'
     elif args.group_dir.endswith('updatenum'):
-        index = FIVE_UPN_INDEX
-        key = 'updatenum'
+        x_index = FIVE_UPN_INDEX
+        key = 'update_num'
     else:
         raise NotImplementedError('未实现的五点图自变量')
 
     metrics = METRICS
 
-    dfs = [pd.DataFrame(np.zeros((len(index), len(metrics))), columns=metrics) \
+    dfs = [pd.DataFrame(np.zeros((len(x_index), len(metrics))), columns=metrics) \
             for _ in range(len(ALGOS))]  # 每个agent一个表
 
     with open(sum_file, 'r') as f:
@@ -127,7 +127,8 @@ def gen_five_csv():
             if line.endswith('output.txt\n'):  # 定位往哪填
                 json_file = os.path.dirname(line) + '\\params.json'
                 params = json.load(open(json_file, 'r'))
-                row = index.index(params['input_args'][key])
+                row = x_index.index(params['input_args'][key])
+                df = dfs[ALGOS.index(params['input_args']['algo'])]
             else:  # 填数
                 item = dict()
                 for col in metrics:
@@ -139,9 +140,10 @@ def gen_five_csv():
                         item[col] = '0.0'
                 df.loc[row] = item
 
-    for i, algo in enumerate(ALGOS):
-        dfs[i].index = index
-        dfs[i].to_csv(args.group_dir + f'/five_{algo}_{key}.csv')
+    for i, df in enumerate(dfs):
+        df.index = x_index
+        df.columns.name = '{}-{}'.format(ALGOS[i], key)
+        df.to_csv(args.group_dir + f'/five_{ALGOS[i]}_{key}.csv')
 
 
 write_summary()

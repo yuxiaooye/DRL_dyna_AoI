@@ -5,7 +5,6 @@ Created on Tue Sep  6 01:52:16 2022
 @author: 86153
 """
 
-
 import time
 import os
 from numpy.core.numeric import indices
@@ -30,14 +29,13 @@ import random
 import multiprocessing as mp
 from torch import distributed as dist
 import argparse
-from algorithms.algo.buffer import MultiCollect,Trajectory,TrajectoryBuffer,ModelBuffer
+from algorithms.algo.buffer import MultiCollect, Trajectory, TrajectoryBuffer, ModelBuffer
+
 
 class IC3Net(nn.ModuleList, YyxAgentBase):
     def __init__(self, logger, device, agent_args, input_args, **kwargs):
         super().__init__()
-        self.discrete = True  # 硬编码
-
-
+        self.input_args = input_args
         self.logger = logger
         self.device = device
         self.n_agent = agent_args.n_agent
@@ -48,7 +46,7 @@ class IC3Net(nn.ModuleList, YyxAgentBase):
         self.v_coeff = agent_args.v_coeff
         self.v_thres = agent_args.v_thres
         self.entropy_coeff = agent_args.entropy_coeff
-        self.entropy_coeff_decay =  agent_args.entropy_coeff_decay  # add
+        self.entropy_coeff_decay = agent_args.entropy_coeff_decay  # add
         self.lr = agent_args.lr
         self.lr_v = agent_args.lr_v
         self.lr_p = agent_args.lr_p
@@ -58,12 +56,11 @@ class IC3Net(nn.ModuleList, YyxAgentBase):
         self.use_reduced_v = agent_args.use_reduced_v
         self.use_rtg = agent_args.use_rtg
         self.use_gae_returns = agent_args.use_gae_returns
-        self.all_comm = True # need to update
+        self.all_comm = True  # need to update
         self.advantage_norm = agent_args.advantage_norm
         self.observation_dim = agent_args.observation_dim
         self.action_space = agent_args.action_space
         self.action_dim = sum([dim.n for dim in self.action_space])
-
 
         # if adj diag is not one, we should add a eye matrix
         agent_args.adj = (torch.as_tensor(agent_args.adj, device=self.device, dtype=torch.float) > 0) | torch.eye(
@@ -73,14 +70,17 @@ class IC3Net(nn.ModuleList, YyxAgentBase):
         self.radius_pi = agent_args.radius_pi
         self.pi_args = agent_args.pi_args
         self.v_args = agent_args.v_args
-        #self.collect_pi, self.actors = self._init_actors()
-        #self.collect_v, self.vs = self._init_vs()
+        # self.collect_pi, self.actors = self._init_actors()
+        # self.collect_v, self.vs = self._init_vs()
         self.hidden_dim = agent_args.v_args.hidden_dim
         self.initNetwork(agent_args)
-        self.optimizer = Adam(list(self.obs_encoder.parameters())+list(self.comm_gate_head.parameters())+ list(self.message_models.parameters())+list(self.main_models.parameters())+list(self.value_heads.parameters())+list(self.actors.parameters()), lr=self.lr)
-        #self.optimizer_pi = Adam(self.actors.parameters(), lr=self.lr)
+        self.optimizer = Adam(list(self.obs_encoder.parameters()) + list(self.comm_gate_head.parameters()) + list(self.message_models.parameters()) + list(self.main_models.parameters()) + list(
+            self.value_heads.parameters()) + list(self.actors.parameters()), lr=self.lr)
+        # self.optimizer_pi = Adam(self.actors.parameters(), lr=self.lr)
 
     def initNetwork(self, agent_args):
+
+        # TODO IC3Net需要保存更多模型，类似G2ANet，不过应该也不会test它~
 
         # [one for all]observation encoding layer
         self.obs_encoder = nn.Linear(self.observation_dim, self.hidden_dim).to(self.device)
@@ -98,16 +98,12 @@ class IC3Net(nn.ModuleList, YyxAgentBase):
         self.value_heads = nn.ModuleList([nn.Linear(self.hidden_dim, 1).to(self.device) for i in range(self.n_agent)])
 
         # action head
-        if self.discrete:
-            self.pi_args.sizes[0] = self.hidden_dim
-            self.actors = nn.ModuleList([CategoricalActor(**self.pi_args._toDict()).to(self.device) for i in range(self.n_agent)])
-        else:
-            self.pi_args.sizes[0] = self.hidden_dim
-            self.actors = nn.ModuleList([GaussianActor(action_dim=self.action_dim, **self.pi_args._toDict()).to(self.device) for i in range(self.n_agent)])
+        self.pi_args.sizes[0] = self.hidden_dim
+        self.actors = nn.ModuleList([CategoricalActor(**self.pi_args._toDict()).to(self.device) for i in range(self.n_agent)])
+
 
         # activation function
         self.activation_function = torch.nn.ReLU(inplace=True)  # add to config file
-
 
     def updateAgent(self, trajs, clip=None):
         time_t = time.time()
@@ -164,13 +160,11 @@ class IC3Net(nn.ModuleList, YyxAgentBase):
         # if rel_v_loss < self.v_thres:
         #     break
         self.logger.log(v_update_step=1)
-        
-        
-        #--------------------------------
+
+        # --------------------------------
         self.logger.log(reward=r)
-        #--------------------------------
-        
-        
+        # --------------------------------
+
         # actor loss
         batch_state, batch_action, batch_logp, batch_advantages_old = [s, a, logp, advantages_old]
         if n_minibatch > 1:
@@ -214,13 +208,12 @@ class IC3Net(nn.ModuleList, YyxAgentBase):
 
     def inference_hidden_state(self, s):
         # encode the state
-        s=s.to(self.device)
+        s = s.to(self.device)
         s_encoding = self.activation_function(self.obs_encoder(s))
 
         # decide which agent to communication
         # [batch_size, n_agent, 2]
         comm_gate_distirbution = self.group_inference(self.comm_gate_head, s_encoding)
-
 
         # merge the message by mean
         if self.all_comm == True:
@@ -251,8 +244,6 @@ class IC3Net(nn.ModuleList, YyxAgentBase):
         hidden_state = s_encoding + self.group_inference(self.main_models, s_encoding) + deal_message
         return hidden_state
 
-
-
     def act(self, s, requires_log=False):
         """
                 Requires input of [batch_size, n_agent, dim] or [n_agent, dim].
@@ -266,27 +257,18 @@ class IC3Net(nn.ModuleList, YyxAgentBase):
             s = s.to(self.device)
 
             hidden_state = self.inference_hidden_state(s)
-            hidden_state =  hidden_state.permute(1, 0, 2) # Now s[i].dim() == 2 ([batch_size, dim])
+            hidden_state = hidden_state.permute(1, 0, 2)  # Now s[i].dim() == 2 ([batch_size, dim])
 
-            # cal the action
-            if self.discrete:
-                probs = []
-                for i in range(self.n_agent):
-                    probs.append(self.actors[i](hidden_state[i]))
-                probs = torch.stack(probs, dim=1)
-                return Categorical(probs)
-            else:
-                means, stds = [], []
-                for i in range(self.n_agent):
-                    mean, std = self.actors[i](hidden_state[i])
-                    means.append(mean)
-                    stds.append(std)
-                means = torch.stack(means, dim=1)
-                stds = torch.stack(stds, dim=1)
-                while means.dim() > dim:
-                    means = means.squeeze(0)
-                    stds = stds.squeeze(0)
-                return Normal(means, stds)
+            # cal the action  # 这里要写成昊哥的branch
+            probs = []
+            for i in range(self.n_agent):
+                probs.append(self.actors[i](hidden_state[i]))
+            probs = torch.stack(probs, dim=1)
+            return {
+                'branch1': Categorical(probs[:, :, 0:9]),
+                'branch2': Categorical(probs[:, :, 9:])
+            }
+
 
     def get_logp(self, s, a):
         s = torch.as_tensor(s, dtype=torch.float32, device=self.device)
@@ -302,17 +284,17 @@ class IC3Net(nn.ModuleList, YyxAgentBase):
 
         log_prob = []
         for i in range(self.n_agent):
-            if self.discrete:
-                probs = self.actors[i](self.s_for_agent(s, i)) # [320,2,9]
-                index1 = torch.select(a, dim=1, index=i).long()[:,0]
-                ans1 = torch.log(torch.gather(probs[:,:9], dim=-1, index=index1.unsqueeze(-1))) # [320,2,1]
-                index2 = torch.select(a, dim=1, index=i).long()[:,1]
-                ans2 = torch.log(torch.gather(probs[:,9:], dim=-1, index=index2.unsqueeze(-1))) # [320,2,1]
-                ans = torch.cat([ans1,ans2],dim=-1)
-                
-                log_prob.append(ans.squeeze(-1))
-            else:
-                log_prob.append(self.actors[i](hidden_state[i], a.select(dim=1, index=i)))
+
+            probs = self.actors[i](hidden_state[i])  # [320,2,9]
+
+            # 这里是昊哥改的吧？
+            index1 = torch.select(a, dim=1, index=i).long()[:, 0]
+            ans1 = torch.log(torch.gather(probs[:, :9], dim=-1, index=index1.unsqueeze(-1)))  # [320,2,1]
+            index2 = torch.select(a, dim=1, index=i).long()[:, 1]
+            ans2 = torch.log(torch.gather(probs[:, 9:], dim=-1, index=index2.unsqueeze(-1)))  # [320,2,1]
+            ans = torch.cat([ans1, ans2], dim=-1)
+            log_prob.append(ans.squeeze(-1))
+
         log_prob = torch.stack(log_prob, dim=1)
         while log_prob.dim() < 3:
             log_prob = log_prob.unsqueeze(-1)
@@ -349,12 +331,12 @@ class IC3Net(nn.ModuleList, YyxAgentBase):
             prev_advantage = torch.zeros_like(prev_return)
             d_mask = d.float()
             for t in reversed(range(T)):
-                deltas[:, t, :, :]= r.select(1, t) + self.gamma * (1-d_mask.select(1,t)) * prev_value - value.select(1, t).detach()
-                advantages[:, t, :, :] = deltas.select(1, t) + self.gamma * self.lamda * (1-d_mask.select(1,t)) * prev_advantage
+                deltas[:, t, :, :] = r.select(1, t) + self.gamma * (1 - d_mask.select(1, t)) * prev_value - value.select(1, t).detach()
+                advantages[:, t, :, :] = deltas.select(1, t) + self.gamma * self.lamda * (1 - d_mask.select(1, t)) * prev_advantage
                 if self.use_gae_returns:
                     returns[:, t, :, :] = value.select(1, t).detach() + advantages.select(1, t)
                 else:
-                    returns[:, t, :, :] = r.select(1, t) + self.gamma * (1-d_mask.select(1, t)) * prev_return
+                    returns[:, t, :, :] = r.select(1, t) + self.gamma * (1 - d_mask.select(1, t)) * prev_return
 
                 prev_return = returns.select(1, t)
                 prev_value = value.select(1, t)

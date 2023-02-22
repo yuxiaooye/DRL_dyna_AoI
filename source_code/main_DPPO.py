@@ -114,8 +114,7 @@ def override(alg_args, run_args, input_args, env):
         run_args.name += f'_InitEnergy={input_args.init_energy}'
     if input_args.user_data_amount != 0.75:
         run_args.name += f'_DataAmount={input_args.user_data_amount}'
-    if input_args.dataset == 'KAIST' and input_args.update_num != 15 or \
-            input_args.dataset == 'NCSU' and input_args.update_num != 10:
+    if input_args.update_num != 10:
         run_args.name += f'_UpdateNum={input_args.update_num}'
     if not input_args.fixed_range:
         run_args.name += f'_NotFixedRange'

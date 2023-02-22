@@ -154,7 +154,6 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
             probs = []
             for i in range(self.n_agent):
                 probs.append(self.actors[i](self.s_for_agent(s, i)))
-            
             probs = torch.stack(probs, dim=1)  # shape = (-1, NUM_AGENT, act_dim1+act_dim2)    
             return {
                 'branch1':Categorical(probs[:,:,0:9]),
