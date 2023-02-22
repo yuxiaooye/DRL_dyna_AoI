@@ -20,14 +20,6 @@ from algorithms.GCRL.policies.policy_factory import policy_factory
 import numpy as np
 
 
-
-
-def initAgent(logger, device, agent_args, input_args):
-    return agent_fn(logger, device, agent_args, input_args)
-
-
-
-
 def set_random_seeds(seed):
     """
     Sets the random seeds for pytorch cpu and gpu
@@ -40,44 +32,46 @@ def set_random_seeds(seed):
 
 
 def main():
-    debug = True
-    gpu = True
-    gpu_id = '0'
-    randomseed = 0
-    output_dir = 'logs/debug'
-    overwrite = True
+
+    from get_args import parse_args
+    input_args, env_args = parse_args()
+    input_args.algo = 'GCRL'  # 硬编码
+    
+    from main_DPPO import getRunArgs, getAlgArgs, override
+
+    run_args = getRunArgs(input_args)
+    print('debug =', run_args.debug)
+    print('test =', run_args.test)
+    
+    from envs.env_mobile import EnvMobile
+    env_fn_train, env_fn_test = EnvMobile, EnvMobile
+    from env_configs.wrappers.env_wrappers import SubprocVecEnv
+
+
+    envs_train = SubprocVecEnv([env_fn_train(env_args, input_args, phase='train') for _ in range(input_args.n_thread)])
+    envs_test = SubprocVecEnv([env_fn_test(env_args, input_args, phase='test') for _ in range(1)])
+    dummy_env = env_fn_train(env_args, input_args, phase='dummy')
+
+    alg_args = getAlgArgs(run_args, input_args, dummy_env)
+
+    class A:
+        __name__ = 'GCRLAgent'
+    alg_args, run_args, input_args = override(alg_args, run_args, input_args, dummy_env, A())
+
     config = 'algorithms/GCRL/configs/infocom_benchmark/mp_separate_dp.py'
-    test_after_every_eval = True
-
-
-
-
-
-    os.environ["CUDA_VISIBLE_DEVICES"] = gpu_id
-    set_random_seeds(randomseed)
+    os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3,4,5,6,7'
+    set_random_seeds(1)
 
     # configure paths
-    make_new_dir = True
-    if os.path.exists(output_dir):
-        if overwrite:
-            shutil.rmtree(output_dir)
-        else:
-            # key = input('Output directory already exists! Overwrite the folder? (y/n)')
-            if True:
-            # if key == 'y':
-                shutil.rmtree(output_dir)
-            else:
-                make_new_dir = False
-                exit(0)
-    if make_new_dir:
-        os.makedirs(output_dir)
-        shutil.copy(config, os.path.join(output_dir, 'config.py'))
+    if not os.path.exists(input_args.output_dir):
+        os.makedirs(input_args.output_dir)
+        shutil.copy(config, os.path.join(input_args.output_dir, 'config.py'))
         base_config = os.path.join(os.path.join(os.path.split(config)[0], os.pardir), 'config.py')
-        shutil.copy(base_config, os.path.join(output_dir, 'base_config.py'))
+        shutil.copy(base_config, os.path.join(input_args.output_dir, 'base_config.py'))
 
-    config = os.path.join(output_dir, 'config.py')
-    log_file = os.path.join(output_dir, 'output.log')
-    rl_weight_file = os.path.join(output_dir, 'rl_model.pth')
+    config = os.path.join(input_args.output_dir, 'config.py')
+    log_file = os.path.join(input_args.output_dir, 'output.log')
+    rl_weight_file = os.path.join(input_args.output_dir, 'rl_model.pth')
 
     # 仅仅知道模块名字和路径的情况下import模块
     spec = importlib.util.spec_from_file_location('config', config)
@@ -90,33 +84,15 @@ def main():
     mode = 'w'
     file_handler = logging.FileHandler(log_file, mode=mode)  # 输出日志信息到磁盘文件
     stdout_handler = logging.StreamHandler(sys.stdout)
-    level = logging.INFO if not debug else logging.DEBUG
+    level = logging.INFO if not input_args.debug else logging.DEBUG
     logging.basicConfig(level=level, handlers=[stdout_handler, file_handler],
                         format='%(asctime)s, %(levelname)s: %(message)s',
                         datefmt="%Y-%m-%d %H:%M:%S")
     logging.info('Current config content is :{}'.format(config))
-    device = torch.device("cuda:0" if torch.cuda.is_available() and gpu else "cpu")
-    if torch.cuda.is_available() and gpu:
-        logging.info('Using gpu: %s' % gpu_id)
-    else:
-        logging.info('Using device: cpu')
 
-    writer = SummaryWriter(log_dir=output_dir)
+    writer = SummaryWriter(log_dir=input_args.output_dir)
 
-    # configure environment
-    # env = gym.make('CrowdSim-v0')
-    from envs.env_mobile import EnvMobile
-    env_fn_train, env_fn_test = EnvMobile, EnvMobile
-    from env_configs.wrappers.env_wrappers import SubprocVecEnv
-    from get_args import parse_args
-    input_args, env_args = parse_args()
 
-    if input_args.debug:
-        input_args.n_thread = 2
-
-    envs_train = SubprocVecEnv([env_fn_train(env_args, input_args, phase='train') for _ in range(input_args.n_thread)])
-    envs_test = SubprocVecEnv([env_fn_test(env_args, input_args, phase='test') for _ in range(1)])
-    dummy_env = env_fn_train(env_args, input_args, phase='dummy')
 
 
     agent = Agent()
@@ -133,7 +109,7 @@ def main():
     policy = policy_factory[policy_config.name]()  # model_predictive_rl
     if not policy.trainable:
         parser.error('Policy has to be trainable')
-    policy.set_device(device)
+    policy.set_device(input_args.device)
 
     # add
     policy_config.obs_dim = dummy_env.obs_space['Box'].shape[1]  # 151 in NCSU with 48 users
@@ -143,7 +119,7 @@ def main():
     policy.configure(policy_config, poi_df)
 
     # read training parameters
-    train_config = config.TrainConfig(debug)
+    train_config = config.TrainConfig(input_args.debug)
     rl_learning_rate = train_config.train.rl_learning_rate
     num_batches = train_config.train.num_batches
     num_episodes = train_config.train.num_episodes
@@ -165,7 +141,7 @@ def main():
     optimizer = train_config.trainer.optimizer
 
     # choose Graph or Vanilla  # 关注一下训练部分的代码
-    trainer = MPRLTrainer(model, policy.state_predictor, memory, device, policy, writer, batch_size, optimizer,
+    trainer = MPRLTrainer(model, policy.state_predictor, memory, input_args.device, policy, writer, batch_size, optimizer,
                           input_args.poi_num,
                           reduce_sp_update_frequency=train_config.train.reduce_sp_update_frequency,
                           freeze_state_predictor=train_config.train.freeze_state_predictor,
@@ -174,23 +150,10 @@ def main():
 
 
 
-    from algorithms.utils import Config
-    alg_args, run_args = Config(), Config()
-    run_args.debug = input_args.debug
-    run_args.group = input_args.group
-    run_args.mute_wandb = input_args.mute_wandb
-    run_args.output_dir = '../runs/GCRL'  # hard_code
-    run_args.log_period = int(20)
-    run_args.seed = 1
-    run_args.algo = None
-    timenow = datetime.strftime(datetime.now(), "%Y-%m-%d_%H-%M-%S")
-    run_args.name = '{}_{}_{}'.format(timenow, input_args.dataset, 'GCRL')
-
-
     from algorithms.utils import LogClient, LogServer
     logger = LogServer({'run_args': run_args, 'algo_args': alg_args, 'input_args': input_args})
     logger = LogClient(logger)
-    explorer = Explorer(envs_train, agent, device, input_args, logger,
+    explorer = Explorer(envs_train, agent, input_args.device, input_args, logger,
                         memory, policy.gamma, target_policy=policy)
 
     logging.info('We use random-exploration methods to warm-up.')

@@ -59,9 +59,8 @@ class RandomAgent():
             self.observation_dim *= 4
         self.action_space = agent_args.action_space
 
-
-
-
+    def save_nets(self, **kwargs):
+        pass
 
     def act(self):
 

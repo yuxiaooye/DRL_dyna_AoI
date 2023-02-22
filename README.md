@@ -22,7 +22,8 @@
 
 ## How to train
 
-conda环境为yyx_adept(10.1.114.77)，yyx_ishen(10.1.114.75)。依赖项不多，哪个包缺了手动pip即可。
+conda环境为yyx_adept(77)，yyx_ishen(75)，yyx_jsac(56/76)，adept(yyx本地)。
+依赖项不多，哪个包缺了手动pip即可。
 
 Docker部署（Optional）
 ```sh

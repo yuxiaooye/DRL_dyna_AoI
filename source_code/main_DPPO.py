@@ -44,22 +44,21 @@ def getRunArgs(input_args):
 def getAlgArgs(run_args, input_args, env):
     assert input_args.env.startswith('Mobile')
     assert input_args.algo in ['DPPO', 'CPPO', 'IPPO', 'DMPO',
-                               'IC3Net', 'IA2C', 'G2ANet', 'G2ANe2','ConvLSTM', 'Random']
+                               'IC3Net', 'IA2C', 'G2ANet', 'G2ANe2','ConvLSTM', 'GCRL', 'Random']
     filename = input_args.algo
     if filename == 'G2ANet2':
         filename = 'G2ANet'
-    if filename == 'Random':
+    if filename in ('Random', 'GCRL'):
         filename = 'DPPO'
     config = importlib.import_module(f"algorithms.config.Mobile_{filename}")
     alg_args = config.getArgs(run_args.radius_v, run_args.radius_pi, env, input_args=input_args)
     return alg_args
 
 
-def initAgent(logger, device, agent_args, input_args):
-    return agent_fn(logger, device, agent_args, input_args)
 
 
-def override(alg_args, run_args, input_args, env):
+
+def override(alg_args, run_args, input_args, env, agent_fn):
     if input_args.use_snrmap:
         # snr features数量， 直接shortcut到策略前一层，0代表不使用snrmap
         alg_args.agent_args.pi_args.snrmap_features = env.cell_num * env.cell_num
@@ -95,8 +94,11 @@ def override(alg_args, run_args, input_args, env):
         # 固定随机种子
         run_args.seed = 1
 
-    if input_args.algo == 'Random':
-        alg_args.n_test = 1
+    if input_args.algo == 'Random':  # 只跑一个episode即可，不更新agent
+        alg_args.n_iter = 1
+        alg_args.n_inner_iter = 0
+        alg_args.rollout_length = 150
+
 
     '''yyx add begin'''
     timenow = datetime.strftime(datetime.now(), "%Y-%m-%d_%H-%M-%S")
@@ -170,7 +172,7 @@ def override(alg_args, run_args, input_args, env):
 
 
     run_args.name += '_'+input_args.tag
-    if not input_args.test or input_args.algo == 'Random':
+    if not input_args.test:
         final = '../{}/{}'.format(input_args.output_dir, run_args.name)
         run_args.output_dir = final
         input_args.output_dir = final
@@ -184,8 +186,7 @@ def override(alg_args, run_args, input_args, env):
 
 
 
-from get_args import parse_args
-input_args, env_args = parse_args()
+
 
 
 def record_input_args(input_args, env_args, output_dir):
@@ -200,62 +201,67 @@ def record_input_args(input_args, env_args, output_dir):
         f.write(json.dumps(params))
 
 
-if input_args.algo == 'IA2C':
-    from algorithms.algo.agent.IA2C import IA2C as agent_fn
-elif input_args.algo == 'IC3Net':
-    from algorithms.algo.agent.IC3Net import IC3Net as agent_fn
-elif input_args.algo == 'DPPO':
-    from algorithms.algo.agent.DPPO import DPPOAgent as agent_fn
-elif input_args.algo == 'CPPO':
-    from algorithms.algo.agent.CPPO import CPPOAgent as agent_fn
-elif input_args.algo == 'DMPO':
-    from algorithms.algo.agent.DMPO import DMPOAgent as agent_fn
-elif input_args.algo == 'G2ANet':
-    from algorithms.algo.agent.G2ANet import G2ANetAgent as agent_fn
-elif input_args.algo == 'G2ANet2':
-    from algorithms.algo.agent.G2ANet import G2ANetHardSoftAgent as agent_fn
-elif input_args.algo == 'IPPO':
-    from algorithms.algo.agent.IPPO import IPPOAgent as agent_fn
-elif input_args.algo =='ConvLSTM':
-    from algorithms.algo.agent.ConvLSTM import ConvLSTMAgent as agent_fn
-elif input_args.algo =='Random':
-    from algorithms.algo.agent.Random import RandomAgent as agent_fn
 
-if input_args.env == 'Mobile':
-    from envs.env_mobile import EnvMobile
-    env_fn_train, env_fn_test = EnvMobile, EnvMobile
-else:
-    raise NotImplementedError
+if __name__ == '__main__':
 
+    from get_args import parse_args
+    input_args, env_args = parse_args()
 
-run_args = getRunArgs(input_args)
-print('debug =', run_args.debug)
-print('test =', run_args.test)
+    if input_args.algo == 'IA2C':
+        from algorithms.algo.agent.IA2C import IA2C as agent_fn
+    elif input_args.algo == 'IC3Net':
+        from algorithms.algo.agent.IC3Net import IC3Net as agent_fn
+    elif input_args.algo == 'DPPO':
+        from algorithms.algo.agent.DPPO import DPPOAgent as agent_fn
+    elif input_args.algo == 'CPPO':
+        from algorithms.algo.agent.CPPO import CPPOAgent as agent_fn
+    elif input_args.algo == 'DMPO':
+        from algorithms.algo.agent.DMPO import DMPOAgent as agent_fn
+    elif input_args.algo == 'G2ANet':
+        from algorithms.algo.agent.G2ANet import G2ANetAgent as agent_fn
+    elif input_args.algo == 'G2ANet2':
+        from algorithms.algo.agent.G2ANet import G2ANetHardSoftAgent as agent_fn
+    elif input_args.algo == 'IPPO':
+        from algorithms.algo.agent.IPPO import IPPOAgent as agent_fn
+    elif input_args.algo =='ConvLSTM':
+        from algorithms.algo.agent.ConvLSTM import ConvLSTMAgent as agent_fn
+    elif input_args.algo =='Random':
+        from algorithms.algo.agent.Random import RandomAgent as agent_fn
 
-dummy_env = env_fn_train(env_args, input_args, phase='dummy')
-alg_args = getAlgArgs(run_args, input_args, dummy_env)
-alg_args, run_args, input_args = override(alg_args, run_args, input_args, dummy_env)
-record_input_args(input_args, env_args, run_args.output_dir)
+    if input_args.env == 'Mobile':
+        from envs.env_mobile import EnvMobile
+        env_fn_train, env_fn_test = EnvMobile, EnvMobile
+    else:
+        raise NotImplementedError
 
-from env_configs.wrappers.env_wrappers import SubprocVecEnv
-envs_train = SubprocVecEnv([env_fn_train(env_args, input_args, phase='train') for _ in range(input_args.n_thread)])
-envs_test = SubprocVecEnv([env_fn_test(env_args, input_args, phase='test') for _ in range(1)])
+    run_args = getRunArgs(input_args)
+    print('debug =', run_args.debug)
+    print('test =', run_args.test)
 
-os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3,4,5,6,7'
+    dummy_env = env_fn_train(env_args, input_args, phase='dummy')
+    alg_args = getAlgArgs(run_args, input_args, dummy_env)
+    alg_args, run_args, input_args = override(alg_args, run_args, input_args, dummy_env, agent_fn)
+    record_input_args(input_args, env_args, run_args.output_dir)
 
-logger = LogServer({'run_args': run_args, 'algo_args': alg_args, 'input_args': input_args})
-logger = LogClient(logger)
-# logger同时被传入agent类和runner类
-agent = initAgent(logger, run_args.device, alg_args.agent_args, input_args)
+    from env_configs.wrappers.env_wrappers import SubprocVecEnv
+    envs_train = SubprocVecEnv([env_fn_train(env_args, input_args, phase='train') for _ in range(input_args.n_thread)])
+    envs_test = SubprocVecEnv([env_fn_test(env_args, input_args, phase='test') for _ in range(1)])
 
-import time
+    os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3,4,5,6,7'
 
-start = time.time()
-if input_args.algo =='Random':
-    runner_fn = RandomRunner
-else:
-    runner_fn = OnPolicyRunner
-runner_fn(logger=logger, agent=agent, envs_learn=envs_train, envs_test=envs_test, dummy_env=dummy_env,
-               run_args=run_args, alg_args=alg_args, input_args=input_args).run()
-end = time.time()
-print(f'OK! 用时{end - start}秒')
+    logger = LogServer({'run_args': run_args, 'algo_args': alg_args, 'input_args': input_args})
+    logger = LogClient(logger)
+    # logger同时被传入agent类和runner类
+    agent = agent_fn(logger, run_args.device, alg_args.agent_args, input_args)
+
+    import time
+
+    start = time.time()
+    if input_args.algo =='Random':
+        runner_fn = RandomRunner
+    else:
+        runner_fn = OnPolicyRunner
+    runner_fn(logger=logger, agent=agent, envs_learn=envs_train, envs_test=envs_test, dummy_env=dummy_env,
+                   run_args=run_args, alg_args=alg_args, input_args=input_args).run()
+    end = time.time()
+    print(f'OK! 用时{end - start}秒')

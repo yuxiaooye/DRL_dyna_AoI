@@ -64,23 +64,21 @@ def parse_args():
     #     assert input_args.use_mlp_model
 
     if input_args.algo == 'Random':
-        input_args.test = True
-        input_args.debug = False
+        input_args.mute_wandb = True
+        input_args.n_thread = 1
 
     if input_args.algo == 'ConvLSTM':
         input_args.use_snrmap = True
 
     if input_args.debug:
         input_args.group = 'debug'
+        input_args.n_thread = 2
     input_args.output_dir = f'runs/{input_args.group}'
 
     if input_args.test:
         input_args.group = 'test'
         input_args.n_thread = 1
         input_args.output_dir = f'{input_args.checkpoint}/test'
-
-    if input_args.algo == 'Random':
-        input_args.output_dir = f'runs/random'
 
 
     if input_args.dataset == 'NCSU':  # 在NCSU的默认值

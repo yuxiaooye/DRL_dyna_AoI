@@ -48,45 +48,52 @@ class RandomRunner(OnPolicyRunner):
         super().__init__(logger, agent, envs_learn, envs_test, dummy_env,
                  run_args, alg_args, input_args, **kwargs)
 
-    def run(self):
-        assert self.run_args.test
-        self.test()
-        return
-
-
     def test(self):
+        pass
 
-        returns = []
-        lengths = []
-        for i in trange(self.n_test, desc='test'):
-            done, ep_ret, ep_len = False, np.zeros((1,)), 0  # ep_ret改为分threads存
-            envs = self.envs_test
-            envs.reset()
-            while not done:  # 测试时限定一个episode最大为length步
-                # s = envs.get_obs_from_outside()
-                a = self.agent.act()
-                _, r, done, envs_info = envs.step(a.tolist())
-                done = done.any()
-                ep_ret += r.sum(axis=-1)  # 对各agent的奖励求和
-                ep_len += 1
-                self.logger.log(interaction=None)
-            if ep_ret.max() > self.best_test_episode_reward:
-                max_id = ep_ret.argmax()
-                self.best_test_episode_reward = ep_ret.max()
-                best_eval_trajs = self.envs_test.get_saved_trajs()
-                poi_aoi_history = self.envs_test.get_poi_aoi_history()
-                serves = self.envs_learn.get_serves()
-                write_output(envs_info[max_id], self.run_args.output_dir, tag='test')
-                self.dummy_env.save_trajs_2(
-                    best_eval_trajs[max_id], poi_aoi_history[max_id], serves[max_id], phase='test', is_newbest=True)
-            returns += [ep_ret.sum()]
-            lengths += [ep_len]
-        returns = np.stack(returns, axis=0)
-        lengths = np.stack(lengths, axis=0)
-        self.logger.log(test_episode_reward=returns.mean(),
-                        test_episode_len=lengths.mean(), test_round=None)
+    def rollout_env(self, iter):
+        """
+        The environment should return sth like [n_agent, dim] or [batch_size, n_agent, dim] in either numpy or torch.
+        """
+        self.routine_count += 1
 
-        average_ret = returns.mean()
-        print(f"{self.n_test} episodes average accumulated reward: {average_ret}")
-        return average_ret
+
+        envs = self.envs_learn
+        for t in range(int(self.rollout_length / self.input_args.n_thread)):  # 加入向量环境后，控制总训练步数不变
+            a = self.agent.act()
+            _, r, done, env_info = envs.step(a.tolist())
+            done = done.any()
+
+            episode_r = r
+            assert episode_r.ndim > 1
+            episode_r = episode_r.sum(axis=-1)  # 对各agent奖励求和
+            self.episode_reward += episode_r
+            self.episode_len += 1
+            self.logger.log(interaction=None)
+
+            if done:
+                ep_r = self.episode_reward
+                print('train episode reward:', ep_r)
+                self.logger.log(mean_episode_reward=ep_r.mean(), episode_len=self.episode_len, episode=None)
+                self.logger.log(max_episode_reward=ep_r.max(), episode_len=self.episode_len, episode=None)
+                if ep_r.max() > self.best_episode_reward:
+                    max_id = ep_r.argmax()
+                    self.best_episode_reward = ep_r.max()
+                    self.agent.save_nets(dir_name=self.run_args.output_dir, is_newbest=True)
+                    best_train_trajs = self.envs_learn.get_saved_trajs()
+                    poi_aoi_history = self.envs_learn.get_poi_aoi_history()
+                    serves = self.envs_learn.get_serves()
+                    write_output(env_info[max_id], self.run_args.output_dir)
+                    self.dummy_env.save_trajs_2(
+                        best_train_trajs[max_id], poi_aoi_history[max_id], serves[max_id], phase='train', is_newbest=True)
+
+                '''执行env的reset'''
+                try:
+                    _, self.episode_len = self.envs_learn.reset(), 0
+                    self.episode_reward = np.zeros((self.input_args.n_thread))
+                except Exception as e:
+                    raise NotImplementedError
+
+
+        return None
 
