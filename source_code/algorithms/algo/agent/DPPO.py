@@ -98,20 +98,33 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
             for i, hard_att in enumerate(hard_atts):  # 添加对自己的hard-att一定是1的维度
                 hard_att = torch.cat([hard_att[:, :i], torch.ones(n_thread, 1).to(self.device), hard_att[:, i:]], dim=-1) #[1,3]
                 square_atts.append(hard_att)
-            square_atts = torch.stack(square_atts).permute((1, 0, 2))  # (thread, agent, agent)
+            square_atts = torch.stack(square_atts, dim=1)  # (thread, agent, agent)
 
-            khop_atts = []
-            for n in range(n_thread):  # k-hops
-                khop_att = torch.matrix_power(square_atts[n], self.input_args.g2a_hops)
-                khop_att = torch.clip(khop_att, 0, 1)  # 矩阵幂后会有2
-                khop_atts.append(khop_att)
-            khop_atts = torch.stack(khop_atts).permute((1, 0, 2))  # (agent, thread, agent)
+            # khop_atts = []
+            # for n in range(n_thread):
+            #     khop_att = torch.matrix_power(square_atts[n], self.input_args.g2a_hops)  # 太慢
+            #     khop_att = torch.clip(khop_att, 0, 1)  # 矩阵幂后会有2
+            #     khop_atts.append(khop_att)
+            # khop_atts = torch.stack(khop_atts, dim=1)  # (agent, thread, agent)
+
+            hops = self.input_args.g2a_hops
+            assert hops in (0, 1, 2, 3)
+            if hops == 0:
+                khop_atts = square_atts * torch.eye(n_agent).unsqueeze(0).repeat((n_thread, 1, 1)).to(self.device)  # 单位矩阵
+            elif hops == 1:
+                khop_atts = square_atts
+            elif hops == 2:
+                khop_atts = torch.matmul(square_atts, square_atts)
+            elif hops == 3:
+                khop_atts = torch.matmul(square_atts, torch.matmul(square_atts, square_atts))
+            khop_atts = torch.clip(khop_atts, 0, 1).permute((1, 0, 2))
 
             ans_s = []
             for i, hard_att in enumerate(khop_atts):  # 施加att到s上
                 shared_s = s * hard_att.unsqueeze(-1)
-                shared_s = torch.sum(shared_s, dim=1)
-                shared_s = torch.where(s[:,i] > 0, s[:, i], shared_s)  # 取并集
+                shared_s = torch.max(shared_s, dim=1)[0]  # 取并集
+                # shared_s = torch.sum(shared_s, dim=1)
+                # shared_s = torch.where(s[:,i] > 0, s[:, i], shared_s)  # 之前gumbel softmax理解错了。。。
                 ans_s.append(shared_s)
             return ans_s
 

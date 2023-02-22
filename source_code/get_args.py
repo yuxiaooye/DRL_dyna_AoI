@@ -39,12 +39,12 @@ def parse_args():
     parser.add_argument('--collect_range', type=float, default=500)
     parser.add_argument('--dyna_level', type=str, default='2', help='指明读取不同难度的poi_QoS.npy')
     parser.add_argument('--init_energy', type=float, default=719280)
-    parser.add_argument('--w_noise', type=float, default=-110)
+    parser.add_argument('--w_noise', type=float, default=-107)  # 0222morning determined
     parser.add_argument('--user_data_amount', type=float, default=0.75)
     parser.add_argument('--update_num', type=int, default=15)  # KAIST
     parser.add_argument('--uav_num', type=int, default=3)
     parser.add_argument('--fixed-col-time', action='store_false')
-    parser.add_argument('--aoith', default=60, type=int)
+    parser.add_argument('--aoith', default=30, type=int)  # 0222morning determined
     parser.add_argument('--txth', default=3, type=int)
     parser.add_argument('--uav_height', default=100, type=int)
     parser.add_argument('--knn_coefficient', default=-1, type=float,help='knn奖励系数')
