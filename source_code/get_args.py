@@ -67,6 +67,9 @@ def parse_args():
         input_args.test = True
         input_args.debug = False
 
+    if input_args.algo == 'ConvLSTM':
+        input_args.use_snrmap = True
+
     if input_args.debug:
         input_args.group = 'debug'
     input_args.output_dir = f'runs/{input_args.group}'

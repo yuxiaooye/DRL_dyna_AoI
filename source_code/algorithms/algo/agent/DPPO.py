@@ -83,11 +83,10 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
         # s [1,3,106]
         if self.input_args.algo == 'IPPO':
             return s
-        if self.input_args.algo == 'G2ANet2':
-            return self.g2a_embed_net(s)
         if self.input_args.algo =='ConvLSTM':
             return self.get_prediction_state(s)
-        
+        if self.input_args.algo == 'G2ANet2':
+            return self.g2a_embed_net(s)
         if self.input_args.algo == 'G2ANet':  # 拿到hard_att的邻居图后，根据邻居图对obs取并集
 
             hard_atts = self.g2a_embed_hard_net(s)
@@ -296,7 +295,7 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
         collect_pi = MultiCollect(torch.matrix_power(self.adj, self.radius_pi), device=self.device)
         actors = nn.ModuleList()
         for i in range(self.n_agent):
-            self.pi_args.sizes[0] = collect_pi.degree[i] * self.observation_dim
+            self.pi_args.sizes[0] = collect_pi.degree[i] * self.observation_dim  # TODO ConvLSTM还需要用collect_pi么？
             actors.append(CategoricalActor(**self.pi_args._toDict()).to(self.device))
 
         return collect_pi, actors
