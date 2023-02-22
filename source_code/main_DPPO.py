@@ -63,11 +63,13 @@ def override(alg_args, run_args, input_args, env):
     if input_args.use_snrmap:
         # snr features数量， 直接shortcut到策略前一层，0代表不使用snrmap
         alg_args.agent_args.pi_args.snrmap_features = env.cell_num * env.cell_num
-
         if input_args.algo=='ConvLSTM':
             alg_args.agent_args.pi_args.snrmap_features = 81
     else:
         alg_args.agent_args.pi_args.snrmap_features = 0
+
+    if input_args.n_iter != -1:
+        alg_args.n_iter = input_args.n_iter
 
 
     if run_args.debug:
@@ -102,7 +104,7 @@ def override(alg_args, run_args, input_args, env):
 
     # tune env
     ## setting
-    if input_args.uav_num != 3:
+    if input_args.uav_num != 5:
         run_args.name += f'_UAVNum={input_args.uav_num}'
     if input_args.collect_range != 500:
         run_args.name += f'_SNR={input_args.collect_range}'
@@ -120,17 +122,18 @@ def override(alg_args, run_args, input_args, env):
 
     if not input_args.fixed_col_time:
         run_args.name += f'_NotFixedColTime'
-    if input_args.aoith != 60:
+    if input_args.aoith != 30:
         run_args.name += f'_AoIth={input_args.aoith}'
     if input_args.txth != 3:
         run_args.name += f'_TXth={input_args.txth}'
     if input_args.uav_height != 100:
         run_args.name += f'_UAVHeight={input_args.uav_height}'
-    if input_args.poi_num is not None:
+    if input_args.dataset == 'KAIST' and input_args.poi_num != 116 or \
+            input_args.dataset == 'NCSU' and input_args.poi_num != 48:
         run_args.name += f'_Users={input_args.poi_num}'
     if not input_args.hao02191630:
         run_args.name += f'_Nothao02191630'
-    if input_args.w_noise != -110:
+    if input_args.w_noise != -107:
         run_args.name += f'_NOISE={input_args.w_noise}'
     if input_args.agent_field != 750:
         run_args.name += f'_FIELD={input_args.agent_field}'

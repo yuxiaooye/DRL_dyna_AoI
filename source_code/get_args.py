@@ -21,6 +21,7 @@ def parse_args():
     # tune agent
     parser.add_argument('--checkpoint', type=str)  # load pretrained model
     parser.add_argument('--n_thread', type=int, default=16)
+    parser.add_argument('--n_iter', type=int, default=-1)
     # tune algo
     parser.add_argument('--lr', type=float)
     parser.add_argument('--lr_v', type=float)
@@ -42,7 +43,7 @@ def parse_args():
     parser.add_argument('--w_noise', type=float, default=-107)  # 0222morning determined
     parser.add_argument('--user_data_amount', type=float, default=0.75)
     parser.add_argument('--update_num', type=int, default=15)  # KAIST
-    parser.add_argument('--uav_num', type=int, default=3)
+    parser.add_argument('--uav_num', type=int, default=5)
     parser.add_argument('--fixed-col-time', action='store_false')
     parser.add_argument('--aoith', default=30, type=int)  # 0222morning determined
     parser.add_argument('--txth', default=3, type=int)

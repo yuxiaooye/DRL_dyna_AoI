@@ -1,17 +1,16 @@
 '''
-summarize a group of exp, gen summary.txt
-can be called by post_process.py to summarize multiple groups of exp
+总结一组实验的性能，生成summary.txt
+可被post_process.py调用，总结多组
 '''
-
+import json
 import numpy as np
 import os
 import argparse
 import pandas as pd
 import sys
-print(os.path.abspath(__file__))
-sys.path.append(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-)
+
+assert os.getcwd().endswith('source_code'), '请将工作路径设为source_code，否则无法正确导入包'
+sys.path.append(os.getcwd())
 
 from tools.macro.macro import *
 
@@ -22,59 +21,26 @@ parser.add_argument('--gen_hyper_tune_csv', default=False, action='store_true')
 parser.add_argument('--gen_five_csv', default=False, action='store_true')
 args = parser.parse_args()
 
-postfix = '\summary.txt' if args.tag == 'train' else '\eval_summary.txt'
-sum_dir = args.group_dir + postfix
+postfix = '/summary.txt' if args.tag == 'train' else '/eval_summary.txt'
+sum_file = args.group_dir + postfix
 
 def write_summary():
-    with open(sum_dir, 'w') as f:
+    with open(sum_file, 'w') as f:
         for root, dirs, files in os.walk(args.group_dir):
             for file in files:
-                if file == f'{args.tag}_output.txt':
-                    abs_path = os.path.join(root, file)
-                    f.write(abs_path + '\n')
-                    with open(abs_path, 'r') as re_f:
-                        text = re_f.read()
-                        if '\nsvo' in text:  # copo
-                            metrics = text[text.rindex(f'best_{args.tag}_reward'):text.rindex('\nsvo')]
-                        elif '\nphi' in text:  # hcopo
-                            metrics = text[text.rindex(f'best_{args.tag}_reward'):text.rindex('\nphi')]
-                        else:  # copo
-                            assert '\n' in text
-                            metrics = text[text.rindex(f'best_{args.tag}_reward'):text.rindex('\n')]
-                        f.write(metrics + '\n\n')
-                    print(1)
+                if not file == f'{args.tag}_output.txt': continue
+                result_file = os.path.join(root, file)
+                f.write(result_file + '\n')
+                with open(result_file, 'r') as re_f:
+                    text = re_f.read()
+                    metrics = text[text.rindex(f'QoI:'):text.rindex('\n')]
+                    f.write(metrics + '\n\n')
+                print(1)
 
 
-def two_dimensional_spline(data):
-    import numpy as np
-    from mpl_toolkits.mplot3d import Axes3D
-    import matplotlib as mpl
-    from scipy import interpolate
-    import matplotlib.cm as cm
-    import matplotlib.pyplot as plt
 
-    def func(x, y):
-        return (x + y) * np.exp(-5.0 * (x ** 2 + y ** 2))
-
-    # X-Y20*20
-    x = np.array(range(4))
-    y = np.array(range(3))
-    x, y = np.meshgrid(x, y)  #
-    fvals = func(x, y)
-
-    # Draw sub-graph1
-    ax = plt.subplot(1, 1, 1, projection='3d')
-    surf = ax.plot_surface(x, y, fvals, rstride=1, cstride=1, cmap=cm.coolwarm, linewidth=0.5, antialiased=True)  # ，，，
-    ax.set_xlabel('x')
-    ax.set_ylabel('y')
-    ax.set_zlabel('f(x, y)')
-    ax.set_zlim3d(0.6, 1.0)
-    plt.colorbar(surf, shrink=0.5, aspect=5)
-
-    plt.show()
-
-'''hyper tuning'''
-def gen_swapped_hyper_tune_csv():
+'''生成hyper tuning表格'''
+def gen_hyper_tune_csv():
     def parse_multi_index(line):
         multi_index = [None, None]
         # index1
@@ -97,20 +63,20 @@ def gen_swapped_hyper_tune_csv():
             multi_index[1] = HT_INDEX2[0]
         return tuple(multi_index)
 
-    metrics = METRICS  # metric
+    metrics = METRICS  # 这里可以改成之前只有五个的老metric
 
     df = pd.DataFrame(np.zeros((len(HT_INDEX1)*len(metrics), len(HT_INDEX2))), columns=HT_INDEX2)
-    with open(sum_dir, 'r') as f:
+    with open(sum_file, 'r') as f:
         while True:
             line = f.readline()
             if not line: break
             if line == '\n': continue
-            # if-else
-            if line.endswith('output.txt\n'):  #
+            # 如下两个if-else交替执行
+            if line.endswith('output.txt\n'):  # 定位行
                 multi_index = parse_multi_index(line)
                 start_row = len(metrics) * HT_INDEX1.index(multi_index[0])
                 col = HT_INDEX2.index(multi_index[1])
-            else:  #
+            else:  # 填数
                 item = []
                 for metric in metrics:
                     print(metric)
@@ -124,70 +90,63 @@ def gen_swapped_hyper_tune_csv():
     df.index = pd.MultiIndex.from_product([HT_INDEX1, metrics])
     df.to_csv(args.group_dir + '/hyper_tune.csv')
 
-    # data ratio
-    a = [i*len(metrics) for i in range(len(HT_INDEX1))]  # loss ratio, i*len(METRICS)+1
+    # 选择表格中所有属于data ratio的单元格
+    a = [i*len(metrics) for i in range(len(HT_INDEX1))]  # 对于loss ratio, 是i*len(METRICS)+1
     b = range(len(HT_INDEX2))
     data_ratio_array = df.iloc[a, b].values.astype(np.float)
     two_dimensional_spline(data_ratio_array)
 
-'''five'''
+'''生成five表格'''
 def gen_five_csv():
-    if args.group_dir.endswith('NU'):
-        index = FIVE_NU_INDEX
-        x = 'NU'
-    elif args.group_dir.endswith('SD'):
-        index = FIVE_SD_INDEX
-        x = 'SD'
-    elif args.group_dir.endswith('NS'):
-        index = FIVE_NS_INDEX
-        x = 'NS'
-    elif args.group_dir.endswith('UH'):
-        index = FIVE_UH_INDEX
-        x = 'UH'
+    if args.group_dir.endswith('uavnum'):
+        index = FIVE_UN_INDEX
+        key = 'uavnum'
+    elif args.group_dir.endswith('aoith'):
+        index = FIVE_AT_INDEX
+        key = 'aoith'
+    elif args.group_dir.endswith('txth'):
+        index = FIVE_TT_INDEX
+        key = 'txth'
+    elif args.group_dir.endswith('updatenum'):
+        index = FIVE_UPN_INDEX
+        key = 'updatenum'
     else:
-        raise NotImplementedError('')
+        raise NotImplementedError('未实现的五点图自变量')
 
-    def parse_index(line):
-        for ind in sorted(index, key=lambda x: len(x), reverse=True):  # , NU=10NU=1
-            if ind in line:
-                return ind
+    metrics = METRICS
 
-    def compute_efficiency(item):
-        item['efficiency 1 (use UUF)'] = float(item['collect_data_ratio']) * (1 - float(item['loss_ratio'])) * float(item['uav_util_factor']) / float(item['energy_consumption_ratio'])
-        item['efficiency 1 (use UUF)'] = str(np.round(item['efficiency 1 (use UUF)'], 3))
-        item['efficiency 2 (use fairness)'] = float(item['collect_data_ratio']) * (1 - float(item['loss_ratio'])) * float(item['fairness']) / float(item['energy_consumption_ratio'])
-        item['efficiency 2 (use fairness)'] = str(np.round(item['efficiency 2 (use fairness)'], 3))
-        return item
+    dfs = [pd.DataFrame(np.zeros((len(index), len(metrics))), columns=metrics) \
+            for _ in range(len(ALGOS))]  # 每个agent一个表
 
-    metrics = METRICS_WITH_EFFICIENCY
-    df = pd.DataFrame(np.zeros((len(index), len(metrics))), columns=metrics)
-
-    with open(sum_dir, 'r') as f:
+    with open(sum_file, 'r') as f:
         while True:
             line = f.readline()
             if not line: break
             if line == '\n': continue
-            # if-else
-            if line.endswith('output.txt\n'):  #
-                ind = parse_index(line)
-                row = index.index(ind)
-            else:  #
+            # 如下两个if-else交替执行
+            if line.endswith('output.txt\n'):  # 定位往哪填
+                json_file = os.path.dirname(line) + '\\params.json'
+                params = json.load(open(json_file, 'r'))
+                row = index.index(params['input_args'][key])
+            else:  # 填数
                 item = dict()
                 for col in metrics:
                     if col in line:
-                        start = line.index(col) + len(col) + 2  # +2 output.txt
-                        end = start + line[start:].index('.') + 4  # scalar
+                        start = line.index(col) + len(col) + 2  # +2 是适配output.txt的格式
+                        end = start + line[start:].index('.') + 4  # 每个scalar数据保留三位小数
                         item[col] = line[start:end]
                     else:
                         item[col] = '0.0'
-                item = compute_efficiency(item)  # train_output.txtefficiency，
                 df.loc[row] = item
-    df.index = index
-    df.to_csv(args.group_dir + f'/five_{x}.csv')
+
+    for i, algo in enumerate(ALGOS):
+        dfs[i].index = index
+        dfs[i].to_csv(args.group_dir + f'/five_{algo}_{key}.csv')
 
 
 write_summary()
 if args.gen_hyper_tune_csv:
-    gen_swapped_hyper_tune_csv()
+    gen_hyper_tune_csv()
 if args.gen_five_csv:
     gen_five_csv()
+

@@ -1,22 +1,18 @@
 # metrics
-OLD_METRICS = ['collect_data_ratio', 'loss_ratio', 'energy_consumption_ratio', 'fairness', 'best_train_reward']
-METRICS = ['collect_data_ratio', 'loss_ratio', 'energy_consumption_ratio', 'fairness', 'uav_util_factor', 'best_train_reward']
-METRICS_WITH_EFFICIENCY = ['collect_data_ratio', 'loss_ratio', 'energy_consumption_ratio', 'fairness', 'uav_util_factor', 'efficiency 1 (use UUF)', 'efficiency 2 (use fairness)']
-METRICS_FINAL = ["Data Collection Ratio", "Data Loss Ratio", "Energy Consumption Ratio", "Geographical Fairness", "Efficiency"]  #
+METRICS = ['QoI', 'episodic_aoi', 'aoi_satis_ratio', 'data_satis_ratio', 'energy_consuming']
 
 # hyper tuning
 HT_INDEX1 = ['EoiCoef=0.001', 'EoiCoef=0.003', 'EoiCoef=0.01', 'EoiCoef=0.03']
 HT_INDEX2 = ['w/o SL, w/o CC', 'w/ SL, w/o CC', 'w/o SL, w/ CC', 'w/ SL, w/ CC']
 
 # FIVE
-## walk_summary.py，five_{algo}.csv
-FIVE_NU_INDEX = ['NU=1', 'NU=2', 'NU=3', 'NU=4', 'NU=5', 'NU=7', 'NU=10']
-FIVE_SD_INDEX = ['SD=0.2', 'SD=0.6', 'SD=1.0', 'SD=2.0', 'SD=5.0']
-FIVE_NS_INDEX = ['NS=1', 'NS=2', 'NS=3', 'NS=4', 'NS=5', 'NS=7', 'NS=10']
-FIVE_UH_INDEX = ['UH=50', 'UH=70', 'UH=90', 'UH=120', 'UH=150']
+FIVE_UN_INDEX = ['NU=2', 'NU=3', 'NU=4', 'NU=5']
+FIVE_AT_INDEX = [10, 20, 30, 40, 50]
+FIVE_TT_INDEX = ['TXth=1', 'TXth=3', 'TXth=5', 'TXth=7', 'TXth=9']
+FIVE_UPN_INDEX = ['UH=4', 'UH=7', 'UH=10', 'UH=13', 'UH=16']
 
-## compare，walkfive_{algo}.csv，df
-ALGOS = ['OurSolution', 'Our(CoPO)', 'MAPPO', 'maddpg', 'TSP', 'random']
+
+ALGOS = ['G2ANetAgent', 'DPPOAgent']  # TODO
 
 
 yrange_for_metrics = {
