@@ -3,11 +3,13 @@ import matplotlib.pyplot as plt
 import torch
 import numpy as np
 from algorithms.GCRL.envs.model.utils import *
+from algorithms.algo.main import write_output
 
 class Explorer(object):
-    def __init__(self, envs, robot, device, input_args, logger=None,
+    def __init__(self, envs, dummy_env, robot, device, input_args, logger=None,
                  memory=None, gamma=None, target_policy=None):
         self.envs = envs
+        self.dummy_env = dummy_env
         self.robot = robot
         self.device = device
         self.input_args = input_args
@@ -16,6 +18,8 @@ class Explorer(object):
         self.gamma = gamma
         self.target_policy = target_policy
         self.statistics = None
+
+        self.best_episode_reward = float('-inf')
 
     # @profile
     def run_k_episodes(self, k, phase, plot_index, update_memory=False):
@@ -70,6 +74,15 @@ class Explorer(object):
                                     knn_reward=sum(d['knn_reward'] for d in env_info) / len(env_info),
                                     )
 
+                    if ep_r.max() > self.best_episode_reward:
+                        max_id = ep_r.argmax()
+                        self.best_episode_reward = ep_r.max()
+                        best_train_trajs = self.envs.get_saved_trajs()
+                        poi_aoi_history = self.envs.get_poi_aoi_history()
+                        serves = self.envs.get_serves()
+                        write_output(env_info[max_id], self.input_args.output_dir)
+                        self.dummy_env.save_trajs_2(
+                            best_train_trajs[max_id], poi_aoi_history[max_id], serves[max_id], phase='train', is_newbest=True)
 
             if update_memory:
                 self.update_memory(states, actions, rewards)  # 这里存的actions不对
@@ -96,8 +109,6 @@ class Explorer(object):
             self.statistics = average(cumulative_rewards), average(average_return_list), average(mean_aoi_list), \
                               average(mean_energy_consumption_list), average(collected_data_amount_list), \
                               average(update_human_coverage_list)
-
-
 
 
         return self.statistics

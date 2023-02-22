@@ -15,23 +15,17 @@ FIVE_UPN_INDEX = [4, 7, 10, 13, 16]
 ALGOS = ['G2ANet', 'DPPO', 'CPPO', 'IC3Net', 'ConvLSTM', 'GCRL', 'Random']
 
 
-yrange_for_metrics = {
-        "Data Collection Ratio": [0.0, 1.3],
-        "Data Loss Ratio": [0, 0.35],
-        "Energy Consumption Ratio": [0.0, 0.5],
-        "Geographical Fairness": [0.0, 1.3],
-        "Efficiency": [0.0, 13.0],
+yranges = {
+        "QoI": [1, 3.5],
+        "episodic_aoi": [0, 60],
+        "aoi_satis_ratio": [0.0, 1.1],
+        "data_satis_ratio": [0.0, 1.1],
+        "energy_consuming": [1.0, 2.0],
     }
 
-xlabel_for_xs = {
-    'NU': "No. of UAVs/UGVs",
-    'SD': "SINR threshold (dB)",
-    'NS': "No. of Subchannels",
-    'UH': "UAV height (m)",
-}
-xtick_for_xs = {
-    'NU': [1, 2, 3, 4, 5, 7, 10],
-    'SD': [-7.0, -2.2, 0.0, 3.0, 7.0],
-    'NS': [1, 2, 3, 4, 5, 7, 10],
-    'UH': [60, 70, 90, 120, 150],
+xlabels = {
+    'uav_num': "No. of UAVs",
+    'aoith': "AoI threshold",
+    'txth': "Tx threshold",
+    'update_num': "No. of Antennas",
 }

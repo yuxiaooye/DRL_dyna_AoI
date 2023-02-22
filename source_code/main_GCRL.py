@@ -7,6 +7,7 @@ import os
 import shutil
 import importlib.util
 import torch
+import json
 import gym
 import copy
 from datetime import datetime
@@ -29,6 +30,17 @@ def set_random_seeds(seed):
     torch.set_num_threads(1)
     np.random.seed(seed)
     return None
+
+def record_input_args(input_args, env_args, output_dir):
+    params = dict()
+    from envs.config_3d import Config
+    env_config = Config(env_args, input_args)
+    params['input_args'] = vars(input_args)
+    params['env_config'] = env_config.dict
+
+    if not os.path.exists(output_dir): os.makedirs(output_dir)
+    with open(os.path.join(output_dir, 'params.json'), 'w') as f:
+        f.write(json.dumps(params))
 
 
 def main():
@@ -57,6 +69,7 @@ def main():
     class A:
         __name__ = 'GCRLAgent'
     alg_args, run_args, input_args = override(alg_args, run_args, input_args, dummy_env, A())
+    record_input_args(input_args, env_args, run_args.output_dir)
 
     config = 'algorithms/GCRL/configs/infocom_benchmark/mp_separate_dp.py'
     os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3,4,5,6,7'
@@ -69,7 +82,7 @@ def main():
         base_config = os.path.join(os.path.join(os.path.split(config)[0], os.pardir), 'config.py')
         shutil.copy(base_config, os.path.join(input_args.output_dir, 'base_config.py'))
 
-    config = os.path.join(input_args.output_dir, 'config.py')
+    # config = os.path.join(input_args.output_dir, 'config.py')  # 注释掉这个试试
     log_file = os.path.join(input_args.output_dir, 'output.log')
     rl_weight_file = os.path.join(input_args.output_dir, 'rl_model.pth')
 
@@ -153,7 +166,7 @@ def main():
     from algorithms.utils import LogClient, LogServer
     logger = LogServer({'run_args': run_args, 'algo_args': alg_args, 'input_args': input_args})
     logger = LogClient(logger)
-    explorer = Explorer(envs_train, agent, input_args.device, input_args, logger,
+    explorer = Explorer(envs_train, dummy_env, agent, input_args.device, input_args, logger,
                         memory, policy.gamma, target_policy=policy)
 
     logging.info('We use random-exploration methods to warm-up.')
@@ -210,14 +223,15 @@ def main():
             #     pass
 
         if episode % checkpoint_interval == 0:
-            current_checkpoint = episode // checkpoint_interval - 1
-            save_every_checkpoint_rl_weight_file = rl_weight_file.split('.')[0] + '_' + str(current_checkpoint) + '.pth'
-            policy.save_model(save_every_checkpoint_rl_weight_file)
+            pass
+            # current_checkpoint = episode // checkpoint_interval - 1
+            # save_every_checkpoint_rl_weight_file = rl_weight_file.split('.')[0] + '_' + str(current_checkpoint) + '.pth'
+            # policy.save_model(save_every_checkpoint_rl_weight_file)
 
     # # test with the best val model
     if best_val_model is not None:
         policy.load_state_dict(best_val_model)
-        torch.save(best_val_model, os.path.join(output_dir, 'best_val.pth'))
+        torch.save(best_val_model, os.path.join(input_args.output_dir, 'best_val.pth'))
         logging.info('Save the best val model with the reward: {}'.format(best_val_reward))
 
     logging.info('Check the best val model\'s performance')
