@@ -50,6 +50,7 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
         self.entropy_coeff = agent_args.entropy_coeff
         self.lr = agent_args.lr  # 5e-5
         self.lr_v = agent_args.lr_v  # 5e-4
+        self.lr_colla = agent_args.lr_colla
         self.n_update_v = agent_args.n_update_v
         self.n_update_pi = agent_args.n_update_pi
         self.n_minibatch = agent_args.n_minibatch
@@ -79,7 +80,7 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
             self.optimizer_v = Adam(self.vs.parameters(), lr=self.lr_v)
             self.optimizer_pi = Adam(self.actors.parameters(), lr=self.lr)
 
-    def get_networked_s(self, s, which_net):
+    def get_networked_s(self, s, which_net, phase=None):
         # s [1,3,106]
         if self.input_args.algo == 'IPPO':
             return s
@@ -116,8 +117,15 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
                 khop_atts = torch.matmul(square_atts, square_atts)
             elif hops == 3:
                 khop_atts = torch.matmul(square_atts, torch.matmul(square_atts, square_atts))
-            khop_atts = torch.clip(khop_atts, 0, 1).permute((1, 0, 2))
+            khop_atts = torch.clip(khop_atts, 0, 1)
 
+            if phase=='test':
+                self.test_saved_hard_att.append(khop_atts.int().cpu().numpy())
+                # print('hard_atts:\n', khop_atts.int())
+            elif phase=='train':
+                self.train_saved_hard_att.append(khop_atts.int().cpu().numpy())
+
+            khop_atts = khop_atts.permute((1, 0, 2))  # (thread, agent, agent)
             ans_s = []
             for i, hard_att in enumerate(khop_atts):  # 施加att到s上
                 shared_s = s * hard_att.unsqueeze(-1)
@@ -137,7 +145,8 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
             return s[:, i, :]
         return s[i]
 
-    def act(self, s):
+    def act(self, s, phase):
+
         """
         非向量环境：Requires input of [batch_size, n_agent, dim] or [n_agent, dim].
         向量环境：Requires input of [batch_size*n_thread, n_agent, dim] or [n_thread, n_agent, dim].
@@ -145,10 +154,18 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
         This method is gradient-free. To get the gradient-enabled probability information, use get_logp().
         Returns a distribution with the same dimensions of input.
         """
+
+
+        # if self.input_args.test:  # 检查，为啥每个agent的obs都一样。。。
+        # print('In agent.act(), inspect...')
+        #     for row in s[0]:
+        #         print(torch.sum(row))
+
+
         with torch.no_grad():
             assert s.dim() == 3
             s = s.to(self.device)
-            s = self.get_networked_s(s, which_net='pi')
+            s = self.get_networked_s(s, which_net='pi', phase=phase)
             # Now s[i].dim() == ([-1, dim]) 注意不同agent的dim不同，由它的邻居数量决定
             probs = []
             for i in range(self.n_agent):
@@ -172,7 +189,7 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
         while a.dim() < s.dim():
             a = a.unsqueeze(-1)
 
-        s = self.get_networked_s(s, which_net='pi')
+        s = self.get_networked_s(s, which_net='pi', phase=None)
         # Now s[i].dim() == 2, a.dim() == 3
         log_prob = []
         for i in range(self.n_agent):
@@ -197,7 +214,7 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
         # s变为有n_agent个元素的列表 且元素.shape = [-1, 邻域agent数量*dim]
         # 各个agent的元素.shape不相同！因为邻域规模不同
         # 得到的是s_{N_j}
-        s = self.get_networked_s(s, which_net='v')
+        s = self.get_networked_s(s, which_net='v', phase=None)
         values = []
         for i in range(self.n_agent):
             values.append(self.vs[i](self.s_for_agent(s, i)))
@@ -254,9 +271,26 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
                 loss_surr = torch.min(surr1, surr2).mean()
                 loss_entropy = - torch.mean(batch_logp_new)
                 loss_pi = - loss_surr - self.entropy_coeff * loss_entropy
+                if self.input_args.algo == 'G2ANet' and not self.input_args.update_colla_by_v_0307:
+                    self.optimizer_colla.zero_grad()
                 self.optimizer_pi.zero_grad()
                 loss_pi.backward()
+                if self.input_args.algo == 'G2ANet' and not self.input_args.update_colla_by_v_0307:
+                    self.optimizer_colla.step()
                 self.optimizer_pi.step()
+                if self.input_args.debug:  # check the update of G2ANet
+                    for name, param in self.g2a_embed_hard_net.named_parameters():
+                        if name == 'hard_encoding.weight':
+                            print("sum of Colla's grad:", torch.sum(param.grad))
+                            assert param.grad is not None
+                            # print('sum of Colla's param:', torch.sum(param))
+                            # print('var of Colla's param:', torch.var(param))
+                    for name, param in self.actors[0].named_parameters():
+                        print("sum of actor's grad:", torch.sum(param.grad))
+                        # print('sum of Actor's param:', torch.sum(param))
+                        # print('var of Actor's param:', torch.var(param))
+                        break
+
                 self.logger.log(surr_loss=loss_surr, entropy=loss_entropy, kl_divergence=kl, pi_update=None)
                 kl_all.append(kl.abs().item())
                 if self.target_kl is not None and kl.abs() > 1.5 * self.target_kl:
@@ -271,8 +305,14 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
                     [batch_returns, batch_state] = [item[idxs] for item in [batch_returns, batch_state]]
                 batch_v_new = self._evalV(batch_state)
                 loss_v = ((batch_v_new - batch_returns) ** 2).mean()
+
+
+                if self.input_args.algo == 'G2ANet' and self.input_args.update_colla_by_v_0307:
+                    self.optimizer_colla.zero_grad()
                 self.optimizer_v.zero_grad()
                 loss_v.backward()
+                if self.input_args.algo == 'G2ANet' and self.input_args.update_colla_by_v_0307:
+                    self.optimizer_colla.step()
                 self.optimizer_v.step()
 
                 var_v = ((batch_returns - batch_returns.mean()) ** 2).mean()
@@ -295,7 +335,7 @@ class DPPOAgent(nn.ModuleList, YyxAgentBase):
         collect_pi = MultiCollect(torch.matrix_power(self.adj, self.radius_pi), device=self.device)
         actors = nn.ModuleList()
         for i in range(self.n_agent):
-            self.pi_args.sizes[0] = collect_pi.degree[i] * self.observation_dim  # TODO ConvLSTM还需要用collect_pi么？
+            self.pi_args.sizes[0] = collect_pi.degree[i] * self.observation_dim
             actors.append(CategoricalActor(**self.pi_args._toDict()).to(self.device))
 
         return collect_pi, actors

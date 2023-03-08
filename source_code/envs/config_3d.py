@@ -70,6 +70,7 @@ class Config(object):
             "RATE_THRESHOLD": 5,  # 关键 Mbps
             "AoI_THRESHOLD": 60,  # 关键
             "aoi_vio_penalty_scale": 0.2,
-            "hao02191630": True
+            "hao02191630": True,
+            "always_fixed_antenna02230040": -1
         }
 

@@ -1,3 +1,4 @@
+import time
 import logging
 import matplotlib.pyplot as plt
 import torch
@@ -41,10 +42,13 @@ class Explorer(object):
             actions = []
             rewards = []
             returns = []
-
+            infer_time = []
             s = 0
             while not done:
+                start = time.time()
                 action = self.robot.act(state, self.envs.get_step_count())
+                end = time.time()
+                infer_time.append(end-start)
                 # if s % 2 == 0:
                 #     action = noisy_action(action)
                 # print(action)
@@ -97,7 +101,8 @@ class Explorer(object):
                 returns.append(step_return)
             average_return_list.append(average(returns))
 
-
+            if self.input_args.debug:
+                print('average infer time:', np.mean(infer_time))
 
             logging.info(f"cumulative_rewards:{average(cumulative_rewards)}, "
                          f"return:{average(average_return_list)},  "

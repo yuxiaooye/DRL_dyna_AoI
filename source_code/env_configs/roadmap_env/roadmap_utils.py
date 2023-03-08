@@ -79,16 +79,16 @@ def get_map_props():
                 'lower_left': [-78.6988, 35.7651],  # lon, lat
                 'upper_right': [-78.6628, 35.7896]
             },
+        'KAIST':
+            {
+                'lower_left': [127.3475, 36.3597],
+                'upper_right': [127.3709, 36.3793]
+            },
         'purdue':
             {
                 'lower_left': [-86.93, 40.4203],
                 'upper_right': [-86.9103, 40.4313]
             },
-        'KAIST':
-            {
-                'lower_left': [127.3475, 36.3597],
-                'upper_right': [127.3709, 36.3793]
-            }
     }
     return map_props
 
@@ -98,7 +98,7 @@ def traj_to_timestamped_geojson(index, trajectory, rm, uav_num, color,
     point_gdf = trajectory.df.copy()
     features = []
     # for Point in GeoJSON type
-    for i, (current_time, row) in enumerate(point_gdf.iterrows()):  # 遍历一个人的不同时间步
+    for t, (current_time, row) in enumerate(point_gdf.iterrows()):  # 遍历一个人的不同时间步
 
         if index < uav_num:  # UAV
             radius, opacity = 5, 1
@@ -106,14 +106,13 @@ def traj_to_timestamped_geojson(index, trajectory, rm, uav_num, color,
             radius, opacity = 2, 1
 
         if aois is not None:
-            radius = aois[i][index-uav_num] / 12 + 3  # aoi越大radius越大 1~120映射到3~13
-        if serves is not None:
-            if serves[i][index-uav_num]:
-                color = "red"
-            else:
-                color = "black"
+            radius = aois[t][index-uav_num] / 12 + 3  # aoi越大radius越大 1~120映射到3~13
+        # 超阈值的user变红
+        if aois[t][index-uav_num] > input_args['aoith']:
+            color = "red"
+        else:
+            color = "black"
 
-        # for Point in GeoJSON type
         cur_coord = [row["geometry"].xy[0][0], row["geometry"].xy[1][0]]
 
         feature1 = {
@@ -138,7 +137,7 @@ def traj_to_timestamped_geojson(index, trajectory, rm, uav_num, color,
                 },
                 "code": 11,
                 'popup': "<a class='image-link' href=C:/Users/Administrator/Desktop/1.png>Open popup</a>"
-                         f"<p> User{index-uav_num}\nAoI={aois[i][index-uav_num]}</p>",
+                         f"<p> User{index-uav_num}\nAoI: {aois[t][index-uav_num]}\n ts: {t}\n pos:{rm.lonlat2pygamexy(*cur_coord)}</p>",
             },
         }
         features.append(feature1)
@@ -148,12 +147,12 @@ def traj_to_timestamped_geojson(index, trajectory, rm, uav_num, color,
 
 
 def uav_traj_to_timestamped_geojson(index, trajectory, rm, uav_num, color,
-                                    input_args, env_config, poi_QoS=None):
+                                    input_args, env_config):
     point_gdf = trajectory.df.copy()
     features1, features2 = [], []
     # for Point in GeoJSON type
     last_x, last_y, last_time = None, None, None
-    for i, (current_time, row) in enumerate(point_gdf.iterrows()):  # 遍历一个人的不同时间步
+    for t, (current_time, row) in enumerate(point_gdf.iterrows()):  # 遍历一个人的不同时间步
 
         if last_x is None:
             last_x = row["geometry"].xy[0][0]
@@ -170,6 +169,7 @@ def uav_traj_to_timestamped_geojson(index, trajectory, rm, uav_num, color,
         # for Point in GeoJSON type
         cur_coord = [[last_x, last_y], [new_x, new_y]]
 
+
         feature1 = {  # 轨迹的线
             "type": "Feature",
             "geometry": {
@@ -178,6 +178,7 @@ def uav_traj_to_timestamped_geojson(index, trajectory, rm, uav_num, color,
             },
             "properties": {
                 "times": [last_time, current_time.isoformat()],
+                # "weights": 100,
                 "icon": 'circle',  # point
                 "iconstyle": {
                     'fillColor': color,
@@ -188,16 +189,19 @@ def uav_traj_to_timestamped_geojson(index, trajectory, rm, uav_num, color,
                 },
                 "style": {  # 外边框的属性
                     "color": color,
-                    "opacity": opacity
+                    "opacity": opacity,  # 在0~10时刻，从0渐变到1，之后全是0
+                    # "weight": 1,
                 },
                 "code": 11,
-            },
+                "popup": f"<p> UAV{index + 1}\n Start point's pos: "
+                         f"{rm.lonlat2pygamexy(*(last_x, last_y))}\n ts: {t}</p>",            },
         }
+
         feature2 = {  # 机头的大点
             "type": "Feature",
             "geometry": {
                 "type": "Point",
-                "coordinates": cur_coord[1],
+                "coordinates": cur_coord[0],  # 如果用[1]的话，会比线提前画出来。。
             },
             "properties": {
                 "times": [last_time, current_time.isoformat()],
@@ -206,7 +210,7 @@ def uav_traj_to_timestamped_geojson(index, trajectory, rm, uav_num, color,
                     'fillColor': color,
                     'fillOpacity': opacity,
                     'stroke': 'true',
-                    'radius': 8,
+                    'radius': 12,
                     'weight': 1,
                 },
                 "style": {  # 外边框的属性
@@ -214,6 +218,7 @@ def uav_traj_to_timestamped_geojson(index, trajectory, rm, uav_num, color,
                     "opacity": opacity
                 },
                 "code": 11,
+                "popup": f"<p> UAV{index+1}\n Pos: {rm.lonlat2pygamexy(*(last_x, last_y))}\n ts: {t}</p>",
             },
         }
         features1.append(feature1)
@@ -222,8 +227,167 @@ def uav_traj_to_timestamped_geojson(index, trajectory, rm, uav_num, color,
         last_y = new_y
         last_time = current_time.isoformat()
 
-
     return features1, features2
+
+def subgraph_uav_traj_to_timestamped_geojson(index, trajectory, rm, uav_num, color,
+                                    input_args, env_config, subgraph):
+    point_gdf = trajectory.df.copy()
+    features1 = []
+    # for Point in GeoJSON type
+    last_x, last_y, last_time = None, None, None
+    for t, (current_time, row) in enumerate(point_gdf.iterrows()):  # 遍历一个人的不同时间步
+
+        if last_x is None:
+            last_x = row["geometry"].xy[0][0]
+            last_y = row["geometry"].xy[1][0]
+            last_time = current_time.isoformat()
+        new_x = row["geometry"].xy[0][0]
+        new_y = row["geometry"].xy[1][0]
+
+        if index < uav_num:  # UAV
+            radius, opacity = 5, 1
+        else:  # human
+            radius, opacity = 2, 1
+
+        # for Point in GeoJSON type
+        cur_coord = [[last_x, last_y], [new_x, new_y]]
+
+        if subgraph:
+            if 65<t<80:
+                opacity = (t-65)/15
+            else:
+                opacity = 0
+
+        feature1 = {  # 轨迹的线
+            "type": "Feature",
+            "geometry": {
+                "type": "LineString",
+                "coordinates": cur_coord,
+            },
+            "properties": {
+                "times": [last_time, current_time.isoformat()],
+                # "weights": 100,
+                "icon": 'circle',  # point
+                "iconstyle": {
+                    'fillColor': color,
+                    'fillOpacity': opacity,
+                    'stroke': False,
+                    'radius': 15 if t in (58, 59) else 10,  # 搜我
+                    'weight': 1,
+                },
+                "style": {  # 外边框的属性
+                    "color": color,
+                    "opacity": opacity,  # 在0~10时刻，从0渐变到1，之后全是0
+                    # "weight": 1,
+                },
+                "code": 11,
+                "popup": f"<p> UAV{index + 1}\n Start point's pos: "
+                         f"{rm.lonlat2pygamexy(*(last_x, last_y))}\n ts: {t}</p>",            },
+        }
+
+        features1.append(feature1)
+
+        last_x = new_x
+        last_y = new_y
+        last_time = current_time.isoformat()
+
+    return features1
+
+
+def adj_to_timestamped_geojson(adjs, current_times, adj_coords, uav_trajs, input_args, env_config, ):
+    # 要么用adj_coords,要么用uav_trajs
+
+    color = '#%02X%02X%02X' % (0, 0, 0)
+    opacity = 1
+
+    features1, features2, features3 = [], [], []
+    last_time = None
+    for t, adj in enumerate(adjs):
+        if last_time is None:
+            last_time = current_times[t].isoformat()
+
+        feature1 = {
+            "type": "Feature",
+            "geometry": {
+                "type": "LineString",
+                # "coordinates": adj_coords[0],
+                "coordinates": (list(uav_trajs[0][t+1]), list(uav_trajs[1][t+1])),
+            },
+            "properties": {
+                "times": [last_time, current_times[t].isoformat()],
+                "icon": 'circle',  # point
+                "iconstyle": {
+                    # 'fillColor': color,
+                    'fillOpacity': 0,
+                    'stroke': 'true',
+                    'radius': 1,
+                    'weight': 1,
+                },
+                "style": {  # 外边框的属性
+                    "color": color,
+                    "opacity": opacity,
+                    'weight': 5 if int(adj[0][1]+adj[1][0]) > 0 else 0,  # TODO 现在是无向图
+                },
+                "code": 11,
+            },
+        }
+        feature2 = {
+            "type": "Feature",
+            "geometry": {
+                "type": "LineString",
+                # "coordinates": adj_coords[1],
+                "coordinates": (list(uav_trajs[1][t+1]), list(uav_trajs[2][t+1])),
+            },
+            "properties": {
+                "times": [last_time, current_times[t].isoformat()],
+                "icon": 'circle',  # point
+                "iconstyle": {
+                    # 'fillColor': color,
+                    'fillOpacity': 0,
+                    'stroke': 'true',
+                    'radius': 1,
+                    'weight': 1,
+                },
+                "style": {  # 外边框的属性
+                    "color": color,
+                    "opacity": opacity,
+                    'weight': 5 if int(adj[1][2]+adj[2][1]) > 0 else 0,
+                },
+                "code": 11,
+            },
+        }
+        feature3 = {
+            "type": "Feature",
+            "geometry": {
+                "type": "LineString",
+                # "coordinates": adj_coords[2],
+                "coordinates": (list(uav_trajs[2][t+1]), list(uav_trajs[0][t+1])),
+            },
+            "properties": {
+                "times": [last_time, current_times[t].isoformat()],
+                "icon": 'circle',  # point
+                "iconstyle": {
+                    # 'fillColor': color,
+                    'fillOpacity': 0,
+                    'stroke': 'true',
+                    'radius': 1,
+                    'weight': 1,
+                },
+                "style": {  # 外边框的属性
+                    "color": color,
+                    "opacity": opacity,
+                    'weight': 5 if int(adj[2][0]+adj[0][2]) > 0 else 0,
+                },
+                "code": 11,
+            },
+        }
+
+        features1.append(feature1)
+        features2.append(feature2)
+        features3.append(feature3)
+        last_time = current_times[t].isoformat()
+
+    return features1, features2, features3
 
 
 # 注意，这种画法圆的大小是和**地图**适配的
@@ -246,6 +410,7 @@ def create_circle(feature):
         'radius': 200,
         'color': 'red'
     }
+
 
 
 # 注意，这种画法圆的大小是和**屏幕**适配的

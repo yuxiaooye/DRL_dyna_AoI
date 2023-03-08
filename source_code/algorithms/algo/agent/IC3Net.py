@@ -216,13 +216,15 @@ class IC3Net(nn.ModuleList, YyxAgentBase):
         comm_gate_distirbution = self.group_inference(self.comm_gate_head, s_encoding)
 
         # merge the message by mean
+        self.all_comm = False
         if self.all_comm == True:
             batch_comm_adj = self.adj.unsqueeze(0).repeat(s.shape[0], 1, 1)
         else:
             # check if need detach (from original author)
+            comm_gate_distirbution_softmax = torch.nn.functional.softmax(comm_gate_distirbution, dim=-1)
             comm_gate = torch.stack(
                 [torch.stack([torch.multinomial(dis, 1).detach() for dis in n_dis]) for n_dis in
-                 comm_gate_distirbution])
+                 comm_gate_distirbution_softmax])
             comm_gate_tensor = comm_gate.unsqueeze(2).repeat(1, 1, self.n_agent)
             comm_gate_tensor_T = comm_gate_tensor.permute(0, 2, 1)
             comm_gate = comm_gate_tensor * comm_gate_tensor_T
@@ -244,7 +246,7 @@ class IC3Net(nn.ModuleList, YyxAgentBase):
         hidden_state = s_encoding + self.group_inference(self.main_models, s_encoding) + deal_message
         return hidden_state
 
-    def act(self, s, requires_log=False):
+    def act(self, s, requires_log=False, phase=None):
         """
                 Requires input of [batch_size, n_agent, dim] or [n_agent, dim].
                 This method is gradient-free. To get the gradient-enabled probability information, use get_logp().

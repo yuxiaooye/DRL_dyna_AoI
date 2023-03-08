@@ -6,6 +6,8 @@ def parse_args():
 
     parser.add_argument('--debug', action='store_true', default=False, )
     parser.add_argument('--test', action='store_true', default=False, )
+    parser.add_argument('--test-with-shenbi', action='store_true')
+    parser.add_argument('--test-save-heatmap', action='store_true')
     parser.add_argument('--user', type=str, default='yyx')
     parser.add_argument('--env', type=str, default='Mobile')
     parser.add_argument('--algo', type=str, required=False, default='IPPO', help="algorithm(G2ANet/IC3Net/CPPO/DPPO/IA2C/IPPO/Random) ")
@@ -17,7 +19,7 @@ def parse_args():
     parser.add_argument("--output_dir", type=str, default='runs/debug', help="which fold to save under 'runs/'")
     parser.add_argument('--group', type=str, default='debug', help='填写我对一组实验的备注，作用与wandb的group和tb的实验保存路径')
     # system stub
-    parser.add_argument('--mute_wandb', default=False, action='store_true')
+    parser.add_argument('--mute_wandb', default=True, action='store_false')  # 后期服务器联网不稳定 网断了进程就会sleep 不要用wandb！
     # tune agent
     parser.add_argument('--checkpoint', type=str)  # load pretrained model
     parser.add_argument('--n_thread', type=int, default=16)
@@ -25,6 +27,7 @@ def parse_args():
     # tune algo
     parser.add_argument('--lr', type=float)
     parser.add_argument('--lr_v', type=float)
+    parser.add_argument('--lr_colla', type=float)
     parser.add_argument('--use-stack-frame', action='store_true')
     # parser.add_argument('--use_extended_value', action='store_false', help='反逻辑，仅用于DPPO')
     # parser.add_argument('--use-mlp-model', action='store_true', help='将model改为最简单的mlp，仅用于DMPO')
@@ -33,6 +36,7 @@ def parse_args():
     parser.add_argument('--tau', type=float, default=0.01)
     parser.add_argument('--map_size', type=int, default=6)  # hyper
     parser.add_argument('--g2a_hops', type=int, default=1)  # hyper
+    parser.add_argument('--update_colla_by_v_0307', action='store_true')  # hyper
 
     # tune env
     ## setting
@@ -48,27 +52,46 @@ def parse_args():
     parser.add_argument('--aoith', default=30, type=int)  # 0222morning determined
     parser.add_argument('--txth', default=3, type=int)
     parser.add_argument('--uav_height', default=100, type=int)
-    parser.add_argument('--knn_coefficient', default=-1, type=float,help='knn奖励系数')
     parser.add_argument('--hao02191630', action='store_false')
+    parser.add_argument('--always_fixed_antenna02230040', default=-1, type=int)
 
     ## MDP
     parser.add_argument('--max_episode_step', type=int, default=120)
     parser.add_argument('--future_obs', type=int, default=0)
     parser.add_argument('--use_snrmap', action='store_true')  # shrotcut is always used
+    parser.add_argument('--high_level_dont_use_snrmap', action='store_true')  #
+    parser.add_argument('--high_level_knn_coefficient', type=float, default=-1)  #
     parser.add_argument('--aVPS', type=float, default=0.2)
     parser.add_argument('--tVPS', type=float, default=0.2)
     parser.add_argument('--agent_field', type=float, default=750)
     input_args = parser.parse_args()
 
-    # if input_args.multi_mlp:
-    #     assert input_args.use_mlp_model
+
+    if input_args.test_with_shenbi:
+        input_args.test = True
+
+
+    if input_args.algo == 'G2ANet':
+        input_args.use_snrmap = True
+        if input_args.dataset == 'NCSU':
+            input_args.knn_coefficient = 0.1
+        elif input_args.dataset == 'KAIST':
+            input_args.knn_coefficient = 0.5
+        else:
+            raise NotImplementedError
+
+
+    if input_args.algo == 'ConvLSTM':
+        input_args.use_snrmap = True
 
     if input_args.algo == 'Random':
         input_args.mute_wandb = True
         input_args.n_thread = 1
 
-    if input_args.algo == 'ConvLSTM':
-        input_args.use_snrmap = True
+    if input_args.high_level_dont_use_snrmap:
+        input_args.use_snrmap = False
+    if input_args.high_level_knn_coefficient != -1:
+        input_args.knn_coefficient = input_args.high_level_knn_coefficient
 
     if input_args.debug:
         input_args.group = 'debug'

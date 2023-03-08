@@ -26,6 +26,7 @@ def getRunArgs(input_args):
     '''yyx add start'''
     run_args.debug = input_args.debug
     run_args.test = input_args.test
+    run_args.test_with_shenbi = input_args.test_with_shenbi
     run_args.checkpoint = input_args.checkpoint
     run_args.group = input_args.group
     run_args.mute_wandb = input_args.mute_wandb
@@ -53,7 +54,6 @@ def getAlgArgs(run_args, input_args, env):
     config = importlib.import_module(f"algorithms.config.Mobile_{filename}")
     alg_args = config.getArgs(run_args.radius_v, run_args.radius_pi, env, input_args=input_args)
     return alg_args
-
 
 
 
@@ -90,6 +90,8 @@ def override(alg_args, run_args, input_args, env, agent_fn):
         run_args.debug = True
         alg_args.n_warmup = 0
         alg_args.n_test = 10
+    if run_args.test_with_shenbi:
+        alg_args.n_test = 1
     if run_args.seed is None:
         # 固定随机种子
         run_args.seed = 1
@@ -134,6 +136,9 @@ def override(alg_args, run_args, input_args, env, agent_fn):
         run_args.name += f'_Users={input_args.poi_num}'
     if not input_args.hao02191630:
         run_args.name += f'_Nothao02191630'
+    if input_args.always_fixed_antenna02230040 != -1:
+        run_args.name += f'_Antenna02230040={input_args.always_fixed_antenna02230040}'
+
     if input_args.w_noise != -107:
         run_args.name += f'_NOISE={input_args.w_noise}'
     if input_args.agent_field != 750:
@@ -157,6 +162,10 @@ def override(alg_args, run_args, input_args, env, agent_fn):
     if input_args.lr_v is not None:
         run_args.name += f'_LR-V={input_args.lr_v}'
         alg_args.agent_args.lr_v = input_args.lr_v
+    if input_args.lr_colla is not None:
+        run_args.name += f'_LRColla={input_args.lr_colla}'
+        alg_args.agent_args.lr_colla = input_args.lr_colla
+
     if input_args.use_stack_frame:
         run_args.name += f'_UseStackFrame'
     if input_args.g2a_hidden_dim != 64:
@@ -169,6 +178,8 @@ def override(alg_args, run_args, input_args, env, agent_fn):
         run_args.name += f'_MapSize={input_args.map_size}'
     if input_args.g2a_hops != 1:
         run_args.name += f'_G2AHops={input_args.g2a_hops}'
+    if input_args.update_colla_by_v_0307:
+        run_args.name += f'_0307UpdateCollaByV'
 
 
     run_args.name += '_'+input_args.tag

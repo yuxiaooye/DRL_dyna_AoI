@@ -7,11 +7,24 @@ import copy
 import math
 import warnings
 import torch
-
+import seaborn as sns
+from matplotlib.colors import ListedColormap
 from gym import spaces
 import os
 import os.path as osp
 from env_configs.roadmap_env.roadmap_utils import Roadmap
+
+
+def get_heatmap(data,path,min,max, test=False):
+
+    f, ax = plt.subplots(figsize=(6, 6))
+
+    cmap = sns.diverging_palette(230, 20, as_cmap=True)
+    cmap.set_under('lightgray')
+
+    sns.heatmap(data,vmin=min,vmax=max, cmap=cmap, xticklabels=[], yticklabels=[])
+    if not test or not os.path.exists(path):  # test时仅保存第一次测试的热力图 不然太慢了
+        plt.savefig(path)
 
 
 class EnvMobile():
@@ -19,6 +32,10 @@ class EnvMobile():
 
     def __init__(self, env_args, input_args, **kwargs):
         assert input_args.fixed_col_time
+
+        if input_args.test_with_shenbi:
+            traj_file = r'F:\PycharmProjects\jsac\DRL_dyna_AoI\runs\0225-KAIST-traj\2023-02-25_16-58-35_KAIST_G2ANetAgent_UAVNum=3_UseSNRMAP_KNN=1.5_\train_saved_trajs\eps_1500.npz'
+            self.shenbi_uav_trajs = list(np.load(traj_file)['arr_0'])
 
         self.config = Config(env_args, input_args)
         self.input_args = input_args
@@ -166,6 +183,8 @@ class EnvMobile():
 
     def _uavs_access_users(self, max_access_num):
         max_access_num = np.array(max_access_num) + 1  # +1将0~8映射到1~9
+        if self.input_args.always_fixed_antenna02230040 != -1:
+            max_access_num = [self.input_args.always_fixed_antenna02230040 for _ in range(self.UAV_NUM)]
         # 读: self.uav_position[uav_index]
         # 读: self.poi_position
         access_lists = []
@@ -185,8 +204,15 @@ class EnvMobile():
             access_lists.append(access_list)
         return access_lists
 
+    def shenbi_interact(self, uav_index):
+        new_x, new_y = self.shenbi_uav_trajs[uav_index][self.step_count]
+        distance = np.linalg.norm(np.array(self.uav_trace[uav_index][-1]) - np.array([new_x, new_y]))
+        energy_consume = self._cal_energy_consuming(distance)
+        return new_x, new_y, distance, energy_consume
+
     def step(self, action, collect_time=12.5):
         action1, action2 = [item[0] for item in action], [item[1] for item in action]
+        # if self.input_args.test: print(action2)  # 打印接入策略
 
         # 若max_episode_step=120, 则执行120次step方法。episode结束时保存120个poi和uav的位置点，而不是icde的121个，把poi、uav的初始位置扔掉！
         self.step_count += 1
@@ -205,11 +231,14 @@ class EnvMobile():
         # uav移动
         for uav_index in range(self.UAV_NUM):
             new_x, new_y, distance, energy_consuming = self._cal_uav_next_pos(uav_index, action1[uav_index])  # 调用关键函数，uav移动
+            if self.input_args.test_with_shenbi:
+                new_x, new_y, distance, energy_consuming = self.shenbi_interact(uav_index)
+
             Flag = self._judge_obstacle(self.uav_position[uav_index], (new_x, new_y))
             if not Flag:  # 如果出界，就不更新uav的位置
                 self.uav_position[uav_index] = (new_x, new_y)
             self.uav_trace[uav_index].append(self.uav_position[uav_index].tolist())  # 维护uav_trace
-            self._use_energy(uav_index, energy_consuming)  # TODO 这个要体现在罚项中
+            self._use_energy(uav_index, energy_consuming)  # 这个要体现在罚项中
             energy_rs[uav_index] -= energy_consuming / self.INITIAL_ENERGY  # 总能量
 
         # uav收集
@@ -560,6 +589,14 @@ class EnvMobile():
 
         # snrmap = snrmap / self.POI_NUM  # 归一化 0221晚上删除 平均值只有0.01左右太小
         snrmap = snrmap.reshape(self.cell_num * self.cell_num, )
+
+        if self.phase == 'test' and self.input_args.test_save_heatmap:
+            heatmap_dir = os.path.join(self.input_args.output_dir, './heatmap')
+            if not os.path.exists(heatmap_dir): os.makedirs(heatmap_dir)
+            get_heatmap(snrmap.reshape(self.cell_num, self.cell_num),
+                        heatmap_dir + '/step_%03d' % (self.step_count) + '.png',
+                        min=0, max=5, test=True)
+
         return snrmap.tolist()
 
     def get_obs_size(self):
@@ -620,22 +657,32 @@ class EnvMobile():
         plt.plot(x, y)
         plt.show()
 
+
     def _plot_histograms(self, data):
         plt.hist(data, bins=20, rwidth=0.8)
         plt.show()
 
     def save_trajs_2(self, best_trajs, poi_aoi_history, serves, iter=None,
-                     phase='train', is_newbest=False):
+                     phase='train', is_newbest=False, adj=None, best_count=None):
 
-        postfix = 'best' if is_newbest else str(iter)
         save_traj_dir = osp.join(self.input_args.output_dir, f'{phase}_saved_trajs')
         if not osp.exists(save_traj_dir): os.makedirs(save_traj_dir)
+        postfix = 'best' if is_newbest else str(iter)
         np.savez(osp.join(save_traj_dir, f'eps_{postfix}.npz'), best_trajs)
         np.savez(osp.join(save_traj_dir, f'eps_{postfix}_aoi.npz'), poi_aoi_history)
         np.savez(osp.join(save_traj_dir, f'eps_{postfix}_serve.npz'), serves)
 
+        if best_count is not None:
+            postfix = f'best{best_count}'  # 保存所有比之前更好的模型
+            np.savez(osp.join(save_traj_dir, f'eps_{postfix}.npz'), best_trajs)
+            np.savez(osp.join(save_traj_dir, f'eps_{postfix}_aoi.npz'), poi_aoi_history)
+            np.savez(osp.join(save_traj_dir, f'eps_{postfix}_serve.npz'), serves)
+
+        if adj is not None:
+            np.savez(osp.join(save_traj_dir, f'eps_{postfix}_adj.npz'), adj)
+
         from tools.post.vis import render_HTML
         render_HTML(self.input_args.output_dir,
-                    tag=phase, iter=iter, best=is_newbest)
+                    tag=phase, iter=iter, best=is_newbest, best_count=best_count)
 
 
